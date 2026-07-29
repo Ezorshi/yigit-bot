@@ -1,23 +1,20 @@
-# Python 3.11 kullan (3.14'te sorun olabiliyor)
 FROM python:3.11-slim
 
-# libsodium kur (ses için gerekli)
+# libsodium'u zorla kur (geliştirme paketleriyle)
 RUN apt-get update && apt-get install -y \
     libsodium-dev \
+    libsodium23 \
+    build-essential \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Çalışma dizini
-WORKDIR /app
+# PyNaCl'yi yeniden derle
+ENV SODIUM_INSTALL=system
 
-# Gereksinimleri kopyala ve kur
+WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Tüm dosyaları kopyala
 COPY . .
 
-# Port (Render için)
 EXPOSE 10000
-
-# Bot'u başlat
 CMD ["python", "discord_bot.py"]
