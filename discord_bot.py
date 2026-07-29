@@ -6,6 +6,29 @@ import string
 import os
 from datetime import datetime, timedelta
 import asyncio
+from flask import Flask
+import threading
+
+# ======================================================================
+# WEB SUNUCUSU (Render'ın port beklentisi için)
+# ======================================================================
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Yigit Bot çalışıyor!"
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
+def run_web():
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
+
+# Web sunucusunu arka planda başlat
+threading.Thread(target=run_web, daemon=True).start()
+print("🌐 Web sunucusu başlatıldı!")
 
 # ======================================================================
 # TOKEN
@@ -53,7 +76,6 @@ class KeyClaimButton(discord.ui.View):
     
     @discord.ui.button(label="🎯 CLAIM KEY", style=discord.ButtonStyle.primary, custom_id="claim_key")
     async def claim_key(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Defer ile ephemeral yanıt ver
         await interaction.response.defer(ephemeral=True)
         
         db = load_db()
@@ -69,7 +91,7 @@ class KeyClaimButton(discord.ui.View):
                 minutes = int((remaining.total_seconds() % 3600) // 60)
                 embed = discord.Embed(
                     title="⏳ WAIT!",
-                    description=f"You can get a new key in **{hours}h {minutes}m**!",
+                    description=f"Next key in **{hours}h {minutes}m**!",
                     color=discord.Color.orange()
                 )
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -87,7 +109,7 @@ class KeyClaimButton(discord.ui.View):
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
         
-        # Yeni key (1 GÜN GEÇERLİ)
+        # Yeni key
         new_key = generate_key()
         expires = now + timedelta(days=1)
         
@@ -104,7 +126,6 @@ class KeyClaimButton(discord.ui.View):
         db["last_key_time"][user_id] = now.isoformat()
         save_db(db)
         
-        # SADECE TIKLAYAN KİŞİ GÖRÜR (Ephemeral)
         embed = discord.Embed(
             title="🔑 YOUR KNIFE DUELS LICENSE",
             description=f"```\n{new_key}\n```",
@@ -137,17 +158,12 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # SES KANALINA KATIL
 # ======================================================================
 async def join_voice_channel():
-    """Bot belirtilen ses kanalına katılır"""
     await bot.wait_until_ready()
-    
     try:
-        # Ses kanalını bul
         channel = bot.get_channel(VOICE_CHANNEL_ID)
         if not channel:
             print(f"❌ Ses kanalı bulunamadi! ID: {VOICE_CHANNEL_ID}")
             return
-        
-        # Zaten bağlı mı kontrol et
         for guild in bot.guilds:
             if guild.voice_client:
                 if guild.voice_client.channel.id == VOICE_CHANNEL_ID:
@@ -155,70 +171,42 @@ async def join_voice_channel():
                     return
                 else:
                     await guild.voice_client.disconnect()
-                    print(f"❌ Eski kanaldan ayrıldı: {guild.voice_client.channel.name}")
-        
-        # Kanal bulundu mu?
-        if not channel:
-            print(f"❌ Kanal bulunamadi: {VOICE_CHANNEL_ID}")
-            return
-        
-        # Katıl
         vc = await channel.connect()
         print(f"✅ Bot ses kanalına katıldı: {channel.name}")
-        
-        # Mikrofonu kapat
         if vc:
             await vc.guild.change_voice_state(channel=channel, self_mute=True, self_deaf=True)
-            print(f"🔇 Bot mikrofonu kapattı, sağır oldu")
-        
     except Exception as e:
         print(f"❌ Ses kanalına katılma hatasi: {e}")
 
 # ======================================================================
-# DURUM DÖNGÜSÜ (Key sayısı ile)
+# DURUM DÖNGÜSÜ
 # ======================================================================
 async def status_loop():
     await bot.wait_until_ready()
-    
     index = 0
     while not bot.is_closed():
         try:
-            # Toplam key sayısını al
             db = load_db()
             total_keys = len(db["keys"])
-            
-            # Aktif key sayısını hesapla
             active_keys = 0
             now = datetime.now()
             for key, data in db["keys"].items():
                 if datetime.fromisoformat(data["expires"]) > now:
                     active_keys += 1
-            
-            # Toplam üye sayısı
             total_members = 0
             for guild in bot.guilds:
                 total_members += guild.member_count or 0
             
-            # Döngü mesajları
             messages = [
                 f"yigitscript | {total_keys} keys",
                 f"Knife Duels | {active_keys} active",
                 f"yigitscript | {total_members} users",
                 "yigitscript | new scripts"
             ]
-            
             status = messages[index % len(messages)]
-            
-            await bot.change_presence(
-                activity=discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name=status
-                )
-            )
-            
+            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
             index += 1
             await asyncio.sleep(12)
-            
         except Exception as e:
             print(f"❌ Durum güncelleme hatasi: {e}")
             await asyncio.sleep(30)
@@ -230,24 +218,14 @@ async def status_loop():
 async def on_ready():
     print(f'✅ Bot hazir! {bot.user}')
     print(f'📊 {len(bot.guilds)} sunucuda aktif')
-    
     for guild in bot.guilds:
         print(f'📌 {guild.name} - {guild.member_count} üye')
-    
-    # Durum döngüsünü başlat
     bot.loop.create_task(status_loop())
-    
-    # Ses kanalına katıl (3 saniye sonra)
     await asyncio.sleep(3)
     await join_voice_channel()
 
-# ======================================================================
-# !KNIFE-DUEL KOMUTU
-# ======================================================================
 @bot.command(name='knife-duel')
 async def send_knife_duel_key(ctx):
-    """Knife Duels key claim mesajını yazılan kanala gönderir"""
-    
     if ctx.author.id != AUTHORIZED_USER_ID:
         await ctx.send("❌ Bu komutu kullanma yetkin yok!")
         return
@@ -270,9 +248,7 @@ async def send_knife_duel_key(ctx):
         color=discord.Color.blue()
     )
     embed.set_footer(text="yigit script | Knife Duels | 24h keys")
-    
     view = KeyClaimButton()
-    
     await ctx.send(embed=embed, view=view)
     await ctx.send(f"✅ Knife Duels key mesajı bu kanala gönderildi!")
 
@@ -281,8 +257,6 @@ async def send_knife_duel_key(ctx):
 # ======================================================================
 @bot.tree.command(name="keyinfo", description="Check your Knife Duels license info")
 async def slash_keyinfo(interaction: discord.Interaction):
-    """Kullanıcının kendi lisans bilgilerini gösterir"""
-    
     db = load_db()
     user_id = str(interaction.user.id)
     
