@@ -1,27 +1,28 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import json
 import random
 import string
 import os
 from datetime import datetime, timedelta
+import asyncio
 
 # ======================================================================
-# TOKEN - RENDER ENV'DEN AL
+# TOKEN
 # ======================================================================
 TOKEN = os.environ.get('BOT_TOKEN')
 if not TOKEN:
-    print("❌ BOT_TOKEN environment variable bulunamadi!")
+    print("❌ BOT_TOKEN bulunamadi!")
     exit(1)
 
 # ======================================================================
-# KANAL ID (Kendi kanal ID'ni buraya yaz)
+# KANAL VE YETKİLİ ID
 # ======================================================================
-TARGET_CHANNEL_ID = 1531977391679995994  # 🔥 Senin kanal ID'n
+TARGET_CHANNEL_ID = 1006507336426340364  # Mesajın gönderileceği kanal
+AUTHORIZED_USER_ID = 1006507336426340364  # Yetkili kullanıcı ID
 
 # ======================================================================
-# VERITABANI
+# VERİTABANI
 # ======================================================================
 DB_FILE = "keys.json"
 
@@ -36,9 +37,6 @@ def save_db(db):
     with open(DB_FILE, 'w') as f:
         json.dump(db, f, indent=4)
 
-# ======================================================================
-# KEY URETME
-# ======================================================================
 def generate_key():
     parts = ['YIGIT']
     for _ in range(3):
@@ -47,7 +45,7 @@ def generate_key():
     return '-'.join(parts)
 
 # ======================================================================
-# KEY CLAIM BUTONU
+# BUTON
 # ======================================================================
 class KeyClaimButton(discord.ui.View):
     def __init__(self):
@@ -64,16 +62,13 @@ class KeyClaimButton(discord.ui.View):
         # 24 saat kontrolü
         if user_id in db["last_key_time"]:
             last_time = datetime.fromisoformat(db["last_key_time"][user_id])
-            time_diff = now - last_time
-            
-            if time_diff < timedelta(hours=24):
-                remaining = timedelta(hours=24) - time_diff
+            if now - last_time < timedelta(hours=24):
+                remaining = timedelta(hours=24) - (now - last_time)
                 hours = int(remaining.total_seconds() // 3600)
                 minutes = int((remaining.total_seconds() % 3600) // 60)
-                
                 embed = discord.Embed(
                     title="⏳ WAIT!",
-                    description=f"You can get a new key in **{hours}h {minutes}m**!",
+                    description=f"Next key in **{hours}h {minutes}m**!",
                     color=discord.Color.orange()
                 )
                 await interaction.followup.send(embed=embed)
@@ -82,11 +77,10 @@ class KeyClaimButton(discord.ui.View):
         # Aktif lisans kontrolü
         if user_id in db["users"]:
             key_data = db["users"][user_id]
-            expires = datetime.fromisoformat(key_data["expires"])
-            if expires > now:
+            if datetime.fromisoformat(key_data["expires"]) > now:
                 embed = discord.Embed(
-                    title="❌ You Already Have a License!",
-                    description=f"Your key: `{key_data['key']}`\nExpires: {expires.strftime('%d.%m.%Y %H:%M')}",
+                    title="❌ Already Have a License!",
+                    description=f"Your key: `{key_data['key']}`",
                     color=discord.Color.orange()
                 )
                 await interaction.followup.send(embed=embed)
@@ -121,16 +115,10 @@ class KeyClaimButton(discord.ui.View):
         )
         embed.add_field(
             name="📝 How to Use",
-            value="Enter this key when the script asks for a license.",
+            value="Enter this key when the Knife Duels script asks for a license.",
             inline=False
         )
-        embed.add_field(
-            name="⏳ Next Key",
-            value=f"{now.strftime('%d.%m.%Y %H:%M')} + 24 hours",
-            inline=False
-        )
-        embed.set_footer(text="yigit script v5.0 | 1 key per 24h | 24h validity")
-        
+        embed.set_footer(text="yigit script | Knife Duels")
         await interaction.followup.send(embed=embed)
 
 # ======================================================================
@@ -138,72 +126,115 @@ class KeyClaimButton(discord.ui.View):
 # ======================================================================
 intents = discord.Intents.default()
 intents.message_content = True
+intents.guilds = True
 bot = commands.Bot(command_prefix='!', intents=intents)
-tree = bot.tree
 
+# ======================================================================
+# DURUM DÖNGÜSÜ
+# ======================================================================
+async def status_loop():
+    """Bot durumunu döngüyle günceller"""
+    await bot.wait_until_ready()
+    
+    status_messages = [
+        "yigitscript | new scripts",
+        "Knife Duels | 24h keys",
+        f"yigitscript | {len(bot.guilds)} servers",
+        "yigitscript | premium cheats"
+    ]
+    
+    index = 0
+    while not bot.is_closed():
+        try:
+            # Sunucu üye sayısını al
+            total_members = 0
+            for guild in bot.guilds:
+                total_members += guild.member_count or 0
+            
+            # Mesajı güncelle
+            if index % 2 == 0:
+                status = f"yigitscript | {total_members} users"
+            else:
+                status = status_messages[index % len(status_messages)]
+            
+            await bot.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=status
+                )
+            )
+            
+            index += 1
+            await asyncio.sleep(10)  # 10 saniyede bir değişir
+            
+        except Exception as e:
+            print(f"❌ Durum güncelleme hatasi: {e}")
+            await asyncio.sleep(30)
+
+# ======================================================================
+# KOMUTLAR
+# ======================================================================
 @bot.event
 async def on_ready():
     print(f'✅ Bot hazir! {bot.user}')
-    await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name="!mesaji-gonder | Knife Duels"
-        )
-    )
-    try:
-        await tree.sync()
-        print("✅ Slash komutlar senkronize edildi!")
-    except Exception as e:
-        print(f"❌ Slash komut senkronizasyon hatasi: {e}")
+    print(f'📊 {len(bot.guilds)} sunucuda aktif')
+    
+    # Sunucu bilgilerini göster
+    for guild in bot.guilds:
+        print(f'📌 {guild.name} - {guild.member_count} üye')
+    
+    # Durum döngüsünü başlat
+    bot.loop.create_task(status_loop())
 
 # ======================================================================
-# !MESAJI-GONDER KOMUTU (Sadece sen kullanabilirsin)
+# !KNIFE-DUEL KOMUTU
 # ======================================================================
-@bot.command(name='mesaji-gonder')
-async def send_key_message(ctx):
-    """Key claim mesajını belirtilen kanala gönderir"""
+@bot.command(name='knife-duel')
+async def send_knife_duel_key(ctx):
+    """Knife Duels key claim mesajını kanala gönderir - Sadece yetkili"""
     
-    # Sadece senin kullanabilmen için ID kontrolü
-    AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Senin Discord ID'n
-    
+    # YETKİ KONTROLÜ
     if ctx.author.id != AUTHORIZED_USER_ID:
-        await ctx.send("❌ Bu komutu kullanma yetkin yok!", ephemeral=True)
+        await ctx.send("❌ Bu komutu kullanma yetkin yok!")
         return
     
-    # Hedef kanalı bul
-    target_channel = bot.get_channel(TARGET_CHANNEL_ID)
-    if not target_channel:
-        await ctx.send(f"❌ Kanal bulunamadı! ID: {TARGET_CHANNEL_ID}")
+    # KANAL KONTROLÜ
+    channel = bot.get_channel(TARGET_CHANNEL_ID)
+    if not channel:
+        await ctx.send(f"❌ Kanal bulunamadi! ID: {TARGET_CHANNEL_ID}")
         return
     
-    # Mesajı oluştur
+    # MESAJI OLUŞTUR
     embed = discord.Embed(
-        title="🔑 KNIFE DUELS LICENSE KEY",
-        description="Click the button below to claim your **Knife Duels** license key.\n\n"
-                    "⚡ **1 key per 24 hours**\n"
-                    "⏰ **24 hours validity**\n"
-                    "🔒 **Your key is sent as a private message**\n\n"
-                    "**✨ Features:**\n"
-                    "• Auto Aim\n"
-                    "• ESP & Glow\n"
-                    "• Rage Mode\n"
-                    "• Visual Effects\n"
-                    "• And much more!",
+        title="🔪 KNIFE DUELS LICENSE KEY",
+        description=(
+            "Click **CLAIM KEY** to get your **Knife Duels** license key!\n\n"
+            "⚡ **1 key per 24 hours**\n"
+            "⏰ **24 hours validity**\n"
+            "🔒 **Private message**\n\n"
+            "**✨ Premium Features:**\n"
+            "• Auto Aim\n"
+            "• ESP & Glow\n"
+            "• Rage Mode\n"
+            "• Visual Effects\n"
+            "• Triggerbot\n"
+            "• And much more!"
+        ),
         color=discord.Color.blue()
     )
-    embed.set_footer(text="yigit script v5.0 | Knife Duels | 24h key")
+    embed.set_footer(text="yigit script | Knife Duels | 24h keys")
+    embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/...")  # İkon ekleyebilirsin
     
     view = KeyClaimButton()
     
-    # Mesajı gönder
-    await target_channel.send(embed=embed, view=view)
-    await ctx.send(f"✅ Mesaj başarıyla <#{TARGET_CHANNEL_ID}> kanalına gönderildi!")
+    # GÖNDER
+    await channel.send(embed=embed, view=view)
+    await ctx.send(f"✅ Knife Duels key mesajı <#{TARGET_CHANNEL_ID}> kanalına gönderildi!")
 
 # ======================================================================
 # SLASH KOMUTLAR
 # ======================================================================
-
-@tree.command(name="key", description="Get your 24h Knife Duels license key")
+@bot.tree.command(name="key", description="Get your 24h Knife Duels license key")
 async def slash_key(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     
@@ -213,16 +244,13 @@ async def slash_key(interaction: discord.Interaction):
     
     if user_id in db["last_key_time"]:
         last_time = datetime.fromisoformat(db["last_key_time"][user_id])
-        time_diff = now - last_time
-        
-        if time_diff < timedelta(hours=24):
-            remaining = timedelta(hours=24) - time_diff
+        if now - last_time < timedelta(hours=24):
+            remaining = timedelta(hours=24) - (now - last_time)
             hours = int(remaining.total_seconds() // 3600)
             minutes = int((remaining.total_seconds() % 3600) // 60)
-            
             embed = discord.Embed(
-                title="⏳ Wait!",
-                description=f"You can get a new key in **{hours}h {minutes}m**!",
+                title="⏳ WAIT!",
+                description=f"Next key in **{hours}h {minutes}m**!",
                 color=discord.Color.orange()
             )
             await interaction.followup.send(embed=embed)
@@ -230,11 +258,10 @@ async def slash_key(interaction: discord.Interaction):
     
     if user_id in db["users"]:
         key_data = db["users"][user_id]
-        expires = datetime.fromisoformat(key_data["expires"])
-        if expires > now:
+        if datetime.fromisoformat(key_data["expires"]) > now:
             embed = discord.Embed(
-                title="❌ You Already Have a License!",
-                description=f"Your key: `{key_data['key']}`\nExpires: {expires.strftime('%d.%m.%Y %H:%M')}",
+                title="❌ Already Have a License!",
+                description=f"Your key: `{key_data['key']}`",
                 color=discord.Color.orange()
             )
             await interaction.followup.send(embed=embed)
@@ -266,16 +293,10 @@ async def slash_key(interaction: discord.Interaction):
         value=f"**24 hours** (Expires: {expires.strftime('%d.%m.%Y %H:%M')})",
         inline=False
     )
-    embed.add_field(
-        name="⏳ Next Key",
-        value=f"{now.strftime('%d.%m.%Y %H:%M')} + 24 hours",
-        inline=False
-    )
-    embed.set_footer(text="yigit script v5.0 | 1 key per 24h | 24h validity")
-    
+    embed.set_footer(text="yigit script | Knife Duels")
     await interaction.followup.send(embed=embed)
 
-@tree.command(name="keyinfo", description="Check your 24h license key info")
+@bot.tree.command(name="keyinfo", description="Check your Knife Duels license info")
 async def slash_keyinfo(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     
@@ -285,7 +306,7 @@ async def slash_keyinfo(interaction: discord.Interaction):
     if user_id not in db["users"]:
         embed = discord.Embed(
             title="❌ No License Found!",
-            description="You don't have a license key yet.\nUse `/key` or click the button to get one!",
+            description="Use `/key` or click the button to get your Knife Duels license!",
             color=discord.Color.red()
         )
         await interaction.followup.send(embed=embed)
@@ -304,103 +325,30 @@ async def slash_keyinfo(interaction: discord.Interaction):
         time_left = "EXPIRED"
     
     embed = discord.Embed(
-        title="🔑 Your License Info",
+        title="🔑 Your Knife Duels License",
         color=discord.Color.red() if is_expired else discord.Color.green()
     )
     embed.add_field(name="Key", value=f"`{key_data['key']}`", inline=False)
     embed.add_field(name="Status", value="❌ Expired" if is_expired else "✅ Active", inline=True)
     embed.add_field(name="Time Left", value=time_left, inline=True)
     embed.add_field(name="Expires", value=expires.strftime('%d.%m.%Y %H:%M'), inline=True)
-    
+    embed.set_footer(text="yigit script | Knife Duels")
     await interaction.followup.send(embed=embed)
 
 # ======================================================================
-# ADMIN KOMUTLARI
+# SLASH KOMUTLARI SENKRONİZE ET
 # ======================================================================
-@tree.command(name="admin_keylist", description="List all keys (Admin only)")
-@app_commands.default_permissions(administrator=True)
-async def admin_keylist(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.followup.send("❌ Permission denied!", ephemeral=True)
-        return
-    
-    db = load_db()
-    if not db["keys"]:
-        await interaction.followup.send("📭 No keys found!")
-        return
-    
-    embed = discord.Embed(
-        title="📊 License List (24h Keys)",
-        color=discord.Color.blue()
-    )
-    
-    active = 0
-    expired = 0
-    for key, data in list(db["keys"].items())[:15]:
-        expires = datetime.fromisoformat(data["expires"])
-        is_expired = expires < datetime.now()
-        status = "✅" if not is_expired else "❌"
-        if not is_expired:
-            active += 1
-        else:
-            expired += 1
-        
-        try:
-            user = await bot.fetch_user(int(data["user"]))
-            username = user.name
-        except:
-            username = "Unknown"
-        
-        if not is_expired:
-            remaining = expires - datetime.now()
-            hours = int(remaining.total_seconds() // 3600)
-            minutes = int((remaining.total_seconds() % 3600) // 60)
-            time_left = f"{hours}h {minutes}m"
-        else:
-            time_left = "EXPIRED"
-        
-        embed.add_field(
-            name=f"{status} {key}",
-            value=f"👤 {username}\n⏳ {time_left}\n📅 {expires.strftime('%d.%m %H:%M')}",
-            inline=False
-        )
-    
-    embed.set_footer(text=f"Total: {len(db['keys'])} | Active: {active} | Expired: {expired}")
-    await interaction.followup.send(embed=embed)
-
-@tree.command(name="admin_keycancel", description="Cancel a license (Admin only)")
-@app_commands.default_permissions(administrator=True)
-async def admin_keycancel(interaction: discord.Interaction, key: str):
-    await interaction.response.defer(ephemeral=True)
-    
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.followup.send("❌ Permission denied!", ephemeral=True)
-        return
-    
-    db = load_db()
-    if key not in db["keys"]:
-        await interaction.followup.send("❌ Invalid key!", ephemeral=True)
-        return
-    
-    user_id = db["keys"][key]["user"]
-    db["keys"][key]["used"] = True
-    db["keys"][key]["expires"] = datetime.now().isoformat()
-    if user_id in db["users"]:
-        del db["users"][user_id]
-    save_db(db)
-    
-    await interaction.followup.send(f"✅ `{key}` has been cancelled!", ephemeral=True)
-    
+@bot.event
+async def on_connect():
     try:
-        user = await bot.fetch_user(int(user_id))
-        await user.send("❌ Your license key has been cancelled! Contact an admin.")
-    except:
-        pass
+        await bot.tree.sync()
+        print("✅ Slash komutlar senkronize edildi!")
+    except Exception as e:
+        print(f"❌ Senkronizasyon hatasi: {e}")
 
 # ======================================================================
 # BOT ÇALIŞTIR
 # ======================================================================
 if __name__ == "__main__":
+    print("🔪 Knife Duels Bot başlatılıyor...")
     bot.run(TOKEN)
