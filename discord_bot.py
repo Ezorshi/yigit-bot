@@ -44,6 +44,7 @@ if not TOKEN:
 # ======================================================================
 AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Senin Discord ID'n
 STATUS_CHANNEL_ID = 1531992520547106930   # 🔥 Durum kanalı ID
+CLICKED_ROLE_ID = 1531968801308938250     # 🔥 Clicked rolü ID
 
 # ======================================================================
 # VERİTABANI
@@ -152,6 +153,7 @@ class KeyClaimButton(discord.ui.View):
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
+intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ======================================================================
@@ -332,7 +334,7 @@ async def send_knife_duel_key(ctx):
     await ctx.send(f"✅ Knife Duels key message sent to this channel!")
 
 # ======================================================================
-# KOMUT: !click-mesaj (Özellikler KALDIRILDI)
+# KOMUT: !click-mesaj
 # ======================================================================
 @bot.command(name='click-mesaj')
 async def send_click_message(ctx):
@@ -342,9 +344,15 @@ async def send_click_message(ctx):
         await ctx.send("❌ You don't have permission to use this command!")
         return
     
+    # Rolü kontrol et
+    role = ctx.guild.get_role(CLICKED_ROLE_ID)
+    if not role:
+        await ctx.send(f"❌ Rol bulunamadi! ID: {CLICKED_ROLE_ID}")
+        return
+    
     embed = discord.Embed(
         title="🔪 KNIFE DUELS ACCESS",
-        description="React with ✅ below to get access to **Knife Duels** keys!",
+        description=f"React with ✅ below to get the **{role.name}** role and access **Knife Duels** keys!",
         color=discord.Color.blue()
     )
     
@@ -352,7 +360,7 @@ async def send_click_message(ctx):
         name="🎯 HOW TO GET ACCESS",
         value=(
             "**1.** React with ✅ below this message\n"
-            "**2.** You will receive the **clicked** role\n"
+            f"**2.** You will receive the **{role.name}** role\n"
             "**3.** Access to **#knife-duels-key** channel\n"
             "**4.** Claim your Knife Duels key!\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -367,7 +375,7 @@ async def send_click_message(ctx):
         name="📌 HOW TO USE",
         value=(
             "1️⃣ Click ✅ reaction\n"
-            "2️⃣ Get **clicked** role\n"
+            f"2️⃣ Get **{role.name}** role\n"
             "3️⃣ Access **#knife-duels-key**\n"
             "4️⃣ Use `/keyinfo`\n"
             "5️⃣ Click **CLAIM KEY**"
@@ -375,18 +383,18 @@ async def send_click_message(ctx):
         inline=True
     )
     
-    embed.set_footer(text="yigit keys | knife duels | clicked role")
+    embed.set_footer(text=f"yigit keys | {role.name} | knife duels")
     
     message = await ctx.send(embed=embed)
     await message.add_reaction("✅")
-    await ctx.send(f"✅ Knife Duels access message sent! React with ✅ to get the **clicked** role.")
+    await ctx.send(f"✅ Knife Duels access message sent! React with ✅ to get the **{role.name}** role.")
 
 # ======================================================================
-# REAKSIYON OLAYI (CLICKED ROLÜ VER)
+# REAKSIYON OLAYI - EPHEMERAL (SADECE KİŞİ GÖRÜR)
 # ======================================================================
 @bot.event
 async def on_reaction_add(reaction, user):
-    """Kullanıcı ✅ tepkisi verdiğinde clicked rolünü ver"""
+    """Kullanıcı ✅ tepkisi verdiğinde clicked rolünü ver - Ephemeral mesaj"""
     
     if user.bot:
         return
@@ -412,7 +420,8 @@ async def on_reaction_add(reaction, user):
     if not member:
         return
     
-    role = discord.utils.get(guild.roles, name="clicked")
+    # Rolü ID ile bul
+    role = guild.get_role(CLICKED_ROLE_ID)
     
     if not role:
         try:
@@ -421,66 +430,73 @@ async def on_reaction_add(reaction, user):
                 color=discord.Color.green(),
                 reason="Knife Duels access role"
             )
-            print(f"✅ 'clicked' rolü oluşturuldu!")
+            print(f"✅ 'clicked' rolü oluşturuldu! ID: {role.id}")
         except Exception as e:
             print(f"❌ Rol oluşturma hatası: {e}")
             return
     
+    # Kullanıcı zaten role sahip mi?
     if role in member.roles:
-        try:
-            embed_dm = discord.Embed(
-                title="ℹ️ ALREADY HAVE ACCESS",
-                description=f"You already have the **{role.name}** role!\n\n"
-                            f"🔑 Access **#knife-duels-key** channel for your key.",
-                color=discord.Color.blue()
-            )
-            embed_dm.set_footer(text="yigit keys | knife duels")
-            await user.send(embed=embed_dm)
-        except:
-            pass
+        # Ephemeral mesaj (sadece o kişi görür)
+        embed_already = discord.Embed(
+            title="ℹ️ ALREADY HAVE ACCESS",
+            description=f"You already have the **{role.name}** role!\n\n"
+                        f"🔑 Access **#knife-duels-key** channel for your key.",
+            color=discord.Color.blue()
+        )
+        embed_already.set_footer(text="yigit keys | knife duels")
+        
+        # Mesajı ephermeral olarak gönder
+        await reaction.message.channel.send(embed=embed_already, ephemeral=True)
         return
     
+    # Rolü ver
     try:
         await member.add_roles(role)
-        print(f"✅ {user.name} - clicked rolü verildi!")
+        print(f"✅ {user.name} - {role.name} rolü verildi!")
         
-        try:
-            embed_dm = discord.Embed(
-                title="✅ KNIFE DUELS ACCESS GRANTED!",
-                description=f"You now have the **{role.name}** role!\n\n"
-                            f"🔑 Go to **#knife-duels-key** channel.\n"
-                            f"🎯 Click **CLAIM KEY** to get your 24h key.\n"
-                            f"📌 Use `/keyinfo` to check your license.",
-                color=discord.Color.green()
-            )
-            embed_dm.add_field(
-                name="📋 YOUR ACCESS",
-                value=f"• Role: **{role.name}**\n"
-                      f"• Channel: **#knife-duels-key**\n"
-                      f"• Key: **24 hours validity**",
-                inline=False
-            )
-            embed_dm.set_footer(text="yigit keys | knife duels")
-            await user.send(embed=embed_dm)
-        except:
-            pass
+        # ✅ EPHEMERAL BAŞARI MESAJI (SADECE KİŞİ GÖRÜR)
+        embed_success = discord.Embed(
+            title="✅ ROLE GRANTED!",
+            description=f"You have been given the **{role.name}** role!",
+            color=discord.Color.green()
+        )
+        embed_success.add_field(
+            name="📋 WHAT NOW?",
+            value=(
+                f"🔑 Go to **#knife-duels-key** channel\n"
+                f"🎯 Click **CLAIM KEY** to get your 24h key\n"
+                f"📌 Use `/keyinfo` to check your license\n\n"
+                f"⚡ **1 key per 24 hours**\n"
+                f"⏰ **24 hours validity**"
+            ),
+            inline=False
+        )
+        embed_success.set_footer(text="yigit keys | knife duels")
+        
+        await reaction.message.channel.send(embed=embed_success, ephemeral=True)
+        print(f"✅ {user.name} - Ephemeral bildirim gönderildi!")
             
     except Exception as e:
         print(f"❌ Rol verme hatası: {e}")
+        embed_error = discord.Embed(
+            title="❌ ERROR",
+            description=f"Could not give you the **{role.name}** role. Please contact an admin.",
+            color=discord.Color.red()
+        )
+        await reaction.message.channel.send(embed=embed_error, ephemeral=True)
 
 # ======================================================================
-# KOMUT: !clear (SADECE SEN)
+# KOMUT: !clear
 # ======================================================================
 @bot.command(name='clear')
 async def clear_messages(ctx, amount: int = 100):
     """Son X mesajı siler - Sadece yetkili"""
     
-    # Yetki kontrolü
     if ctx.author.id != AUTHORIZED_USER_ID:
         await ctx.send("❌ You don't have permission to use this command!")
         return
     
-    # Miktar sınırı
     if amount > 100:
         amount = 100
         await ctx.send("⚠️ Maximum 100 messages can be deleted at once.")
@@ -490,7 +506,6 @@ async def clear_messages(ctx, amount: int = 100):
         return
     
     try:
-        # Mesajları sil
         deleted = await ctx.channel.purge(limit=amount)
         await ctx.send(f"✅ Deleted **{len(deleted)}** messages!", delete_after=3)
         print(f"🗑️ {ctx.author.name} deleted {len(deleted)} messages in #{ctx.channel.name}")
