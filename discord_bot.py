@@ -25,7 +25,7 @@ def load_db():
         with open(DB_FILE, 'r') as f:
             return json.load(f)
     except:
-        return {"keys": {}, "users": {}}
+        return {"keys": {}, "users": {}, "last_key_time": {}}
 
 def save_db(db):
     with open(DB_FILE, 'w') as f:
@@ -55,7 +55,7 @@ async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="/key | yigit script"
+            name="/key | 24s 1 key"
         )
     )
     try:
@@ -65,39 +65,67 @@ async def on_ready():
         print(f"❌ Slash komut senkronizasyon hatasi: {e}")
 
 # ======================================================================
-# SLASH KOMUTLAR (Ephemeral / Gizli Mesaj)
+# SLASH KOMUTLAR
 # ======================================================================
 
-@tree.command(name="key", description="Yeni lisans anahtari al (Gizli)")
+@tree.command(name="key", description="Yeni lisans anahtari al (24s 1 key)")
 async def slash_key(interaction: discord.Interaction):
-    """Yeni lisans anahtarı al - SADECE SEN GÖREBİLİRSİN"""
+    """Yeni lisans anahtarı al - 24 saatte 1 key"""
     
-    # Ephemeral olduğu için hemen yanıt ver (gizli)
     await interaction.response.defer(ephemeral=True)
     
     db = load_db()
     user_id = str(interaction.user.id)
+    now = datetime.now()
     
-    # Kullanıcının aktif key'i var mı?
+    # ===== 24 SAAT KONTROLÜ =====
+    if user_id in db["last_key_time"]:
+        last_time = datetime.fromisoformat(db["last_key_time"][user_id])
+        time_diff = now - last_time
+        
+        if time_diff < timedelta(hours=24):
+            remaining = timedelta(hours=24) - time_diff
+            hours = int(remaining.total_seconds() // 3600)
+            minutes = int((remaining.total_seconds() % 3600) // 60)
+            
+            embed = discord.Embed(
+                title="⏳ Bekle!",
+                description=f"**{hours} saat {minutes} dakika** sonra tekrar key alabilirsin!",
+                color=discord.Color.orange()
+            )
+            embed.add_field(
+                name="📅 Son Key Alma",
+                value=last_time.strftime('%d.%m.%Y %H:%M'),
+                inline=False
+            )
+            await interaction.followup.send(embed=embed)
+            return
+    
+    # ===== KULLANICININ AKTİF KEY'İ VAR MI? =====
     if user_id in db["users"]:
         key_data = db["users"][user_id]
         expires = datetime.fromisoformat(key_data["expires"])
-        if expires > datetime.now():
+        if expires > now:
             embed = discord.Embed(
                 title="❌ Zaten Lisansiniz Var!",
                 description=f"Lisans anahtariniz: `{key_data['key']}`\nSüresi: {expires.strftime('%d.%m.%Y %H:%M')}",
                 color=discord.Color.orange()
             )
+            embed.add_field(
+                name="⏳ Key Alma",
+                value="Aktif lisansın varken yeni key alamazsın!",
+                inline=False
+            )
             await interaction.followup.send(embed=embed)
             return
     
-    # Yeni key oluştur
+    # ===== YENİ KEY OLUŞTUR =====
     new_key = generate_key()
-    expires = datetime.now() + timedelta(days=30)
+    expires = now + timedelta(days=30)
     
     db["keys"][new_key] = {
         "user": user_id,
-        "created": datetime.now().isoformat(),
+        "created": now.isoformat(),
         "expires": expires.isoformat(),
         "used": False
     }
@@ -105,9 +133,10 @@ async def slash_key(interaction: discord.Interaction):
         "key": new_key,
         "expires": expires.isoformat()
     }
+    db["last_key_time"][user_id] = now.isoformat()
     save_db(db)
     
-    # Ephemeral (gizli) mesaj gönder
+    # ===== GİZLİ MESAJ GÖNDER =====
     embed = discord.Embed(
         title="🔑 YIGIT SCRIPT LISANS ANAHTARI",
         description=f"```\n{new_key}\n```",
@@ -123,14 +152,19 @@ async def slash_key(interaction: discord.Interaction):
         value="Script'i çalistirdiginda açilan lisansa bu anahtari gir.",
         inline=False
     )
-    embed.set_footer(text="yigit script v5.0 premium")
+    embed.add_field(
+        name="⏳ Sonraki Key",
+        value=f"{now.strftime('%d.%m.%Y %H:%M')} + 24 saat",
+        inline=False
+    )
+    embed.set_footer(text="yigit script v5.0 premium | 24s 1 key")
     
     await interaction.followup.send(embed=embed)
 
 
-@tree.command(name="keyinfo", description="Lisans bilgilerini göster (Gizli)")
+@tree.command(name="keyinfo", description="Lisans bilgilerini göster")
 async def slash_keyinfo(interaction: discord.Interaction, key: str):
-    """Lisans bilgilerini göster - SADECE SEN GÖREBİLİRSİN"""
+    """Lisans bilgilerini göster"""
     
     await interaction.response.defer(ephemeral=True)
     
@@ -147,6 +181,7 @@ async def slash_keyinfo(interaction: discord.Interaction, key: str):
     key_data = db["keys"][key]
     expires = datetime.fromisoformat(key_data["expires"])
     is_expired = expires < datetime.now()
+    created = datetime.fromisoformat(key_data["created"])
     
     embed = discord.Embed(
         title="🔑 Lisans Bilgisi",
@@ -154,7 +189,8 @@ async def slash_keyinfo(interaction: discord.Interaction, key: str):
     )
     embed.add_field(name="Anahtar", value=f"`{key}`", inline=False)
     embed.add_field(name="Durum", value="❌ Süresi Doldu" if is_expired else "✅ Aktif", inline=True)
-    embed.add_field(name="Süre", value=expires.strftime('%d.%m.%Y %H:%M'), inline=True)
+    embed.add_field(name="Oluşturulma", value=created.strftime('%d.%m.%Y %H:%M'), inline=True)
+    embed.add_field(name="Son Kullanım", value=expires.strftime('%d.%m.%Y %H:%M'), inline=True)
     
     await interaction.followup.send(embed=embed)
 
@@ -162,11 +198,10 @@ async def slash_keyinfo(interaction: discord.Interaction, key: str):
 @tree.command(name="keylist", description="Tüm lisansları listele (Sadece Admin)")
 @app_commands.default_permissions(administrator=True)
 async def slash_keylist(interaction: discord.Interaction):
-    """Tüm lisansları listele - SADECE SEN GÖREBİLİRSİN"""
+    """Tüm lisansları listele"""
     
     await interaction.response.defer(ephemeral=True)
     
-    # Admin kontrolü
     if not interaction.user.guild_permissions.administrator:
         embed = discord.Embed(
             title="❌ Yetki Yok!",
@@ -201,16 +236,16 @@ async def slash_keylist(interaction: discord.Interaction):
         else:
             expired += 1
         
-        # Kullanıcı ismini al
         try:
             user = await bot.fetch_user(int(data["user"]))
             username = user.name
         except:
             username = "Bilinmeyen"
         
+        created = datetime.fromisoformat(data["created"])
         embed.add_field(
             name=f"{status} {key}",
-            value=f"👤 {username}\n📅 {expires.strftime('%d.%m.%Y')}",
+            value=f"👤 {username}\n📅 {created.strftime('%d.%m')} → {expires.strftime('%d.%m.%Y')}",
             inline=False
         )
     
@@ -221,11 +256,10 @@ async def slash_keylist(interaction: discord.Interaction):
 @tree.command(name="keycancel", description="Lisansı iptal et (Sadece Admin)")
 @app_commands.default_permissions(administrator=True)
 async def slash_keycancel(interaction: discord.Interaction, key: str):
-    """Lisansı iptal et - SADECE SEN GÖREBİLİRSİN"""
+    """Lisansı iptal et"""
     
     await interaction.response.defer(ephemeral=True)
     
-    # Admin kontrolü
     if not interaction.user.guild_permissions.administrator:
         embed = discord.Embed(
             title="❌ Yetki Yok!",
@@ -259,7 +293,6 @@ async def slash_keycancel(interaction: discord.Interaction, key: str):
     )
     await interaction.followup.send(embed=embed)
     
-    # İptal edilen kullanıcıya DM gönder
     try:
         user = await bot.fetch_user(int(user_id))
         await user.send("❌ Lisans anahtarınız iptal edildi! Yetkili ile iletişime geçin.")
@@ -270,11 +303,10 @@ async def slash_keycancel(interaction: discord.Interaction, key: str):
 @tree.command(name="keystats", description="Lisans istatistikleri (Sadece Admin)")
 @app_commands.default_permissions(administrator=True)
 async def slash_keystats(interaction: discord.Interaction):
-    """Lisans istatistikleri - SADECE SEN GÖREBİLİRSİN"""
+    """Lisans istatistikleri"""
     
     await interaction.response.defer(ephemeral=True)
     
-    # Admin kontrolü
     if not interaction.user.guild_permissions.administrator:
         embed = discord.Embed(
             title="❌ Yetki Yok!",
@@ -309,28 +341,40 @@ async def slash_keystats(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 # ======================================================================
-# ESKİ KOMUTLAR (Geriye dönük uyumluluk için)
+# ESKİ KOMUTLAR
 # ======================================================================
 
 @bot.command(name='key')
 async def old_get_key(ctx):
-    """Eski !key komutu - DM gönderir"""
+    """Eski !key komutu - Günlük limit ile"""
     db = load_db()
     user_id = str(ctx.author.id)
+    now = datetime.now()
+    
+    # 24 saat kontrolü
+    if user_id in db["last_key_time"]:
+        last_time = datetime.fromisoformat(db["last_key_time"][user_id])
+        time_diff = now - last_time
+        if time_diff < timedelta(hours=24):
+            remaining = timedelta(hours=24) - time_diff
+            hours = int(remaining.total_seconds() // 3600)
+            minutes = int((remaining.total_seconds() % 3600) // 60)
+            await ctx.send(f"⏳ **{hours} saat {minutes} dakika** sonra tekrar key alabilirsin!")
+            return
     
     if user_id in db["users"]:
         key_data = db["users"][user_id]
         expires = datetime.fromisoformat(key_data["expires"])
-        if expires > datetime.now():
-            await ctx.send("❌ Zaten lisansın var! !keyinfo YIGIT-XXXX ile kontrol et.")
+        if expires > now:
+            await ctx.send(f"❌ Zaten lisansın var! !keyinfo {key_data['key']} ile kontrol et.")
             return
     
     new_key = generate_key()
-    expires = datetime.now() + timedelta(days=30)
+    expires = now + timedelta(days=30)
     
     db["keys"][new_key] = {
         "user": user_id,
-        "created": datetime.now().isoformat(),
+        "created": now.isoformat(),
         "expires": expires.isoformat(),
         "used": False
     }
@@ -338,6 +382,7 @@ async def old_get_key(ctx):
         "key": new_key,
         "expires": expires.isoformat()
     }
+    db["last_key_time"][user_id] = now.isoformat()
     save_db(db)
     
     try:
@@ -349,6 +394,11 @@ async def old_get_key(ctx):
         embed.add_field(
             name="📅 Geçerlilik Süresi",
             value=f"30 gün (Son: {expires.strftime('%d.%m.%Y')})",
+            inline=False
+        )
+        embed.add_field(
+            name="⏳ Sonraki Key",
+            value=f"{now.strftime('%d.%m.%Y %H:%M')} + 24 saat",
             inline=False
         )
         await ctx.author.send(embed=embed)
