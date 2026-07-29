@@ -332,7 +332,7 @@ async def send_knife_duel_key(ctx):
     await ctx.send(f"✅ Knife Duels key message sent to this channel!")
 
 # ======================================================================
-# KOMUT: !click-mesaj
+# KOMUT: !click-mesaj (Özellikler KALDIRILDI)
 # ======================================================================
 @bot.command(name='click-mesaj')
 async def send_click_message(ctx):
@@ -361,18 +361,6 @@ async def send_click_message(ctx):
             "🔒 **Private key delivery**"
         ),
         inline=False
-    )
-    
-    embed.add_field(
-        name="🔪 KNIFE DUELS FEATURES",
-        value=(
-            "• Auto Aim\n"
-            "• ESP & Glow\n"
-            "• Rage Mode\n"
-            "• Visual Effects\n"
-            "• Triggerbot"
-        ),
-        inline=True
     )
     
     embed.add_field(
@@ -479,6 +467,38 @@ async def on_reaction_add(reaction, user):
             
     except Exception as e:
         print(f"❌ Rol verme hatası: {e}")
+
+# ======================================================================
+# KOMUT: !clear (SADECE SEN)
+# ======================================================================
+@bot.command(name='clear')
+async def clear_messages(ctx, amount: int = 100):
+    """Son X mesajı siler - Sadece yetkili"""
+    
+    # Yetki kontrolü
+    if ctx.author.id != AUTHORIZED_USER_ID:
+        await ctx.send("❌ You don't have permission to use this command!")
+        return
+    
+    # Miktar sınırı
+    if amount > 100:
+        amount = 100
+        await ctx.send("⚠️ Maximum 100 messages can be deleted at once.")
+    
+    if amount < 1:
+        await ctx.send("❌ Please specify a number greater than 0.")
+        return
+    
+    try:
+        # Mesajları sil
+        deleted = await ctx.channel.purge(limit=amount)
+        await ctx.send(f"✅ Deleted **{len(deleted)}** messages!", delete_after=3)
+        print(f"🗑️ {ctx.author.name} deleted {len(deleted)} messages in #{ctx.channel.name}")
+        
+    except discord.Forbidden:
+        await ctx.send("❌ I don't have permission to delete messages!")
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Failed to delete messages: {e}")
 
 # ======================================================================
 # /KEYINFO KOMUTU
