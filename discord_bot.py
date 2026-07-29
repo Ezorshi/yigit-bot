@@ -6,7 +6,7 @@ import string
 import os
 from datetime import datetime, timedelta
 import asyncio
-from flask import Flask, request, jsonify  # 🔥 request ve jsonify eklendi!
+from flask import Flask, request, jsonify
 import threading
 import psutil
 import time
@@ -25,13 +25,12 @@ def health():
     return "OK", 200
 
 # ======================================================================
-# 🔥 API - KEY DOĞRULAMA (Script'ler için) - YENİ EKLENDİ
+# API - KEY DOĞRULAMA (Script'ler için)
 # ======================================================================
-@app.route('/verify', methods=['POST'])  # 🔥 methods=['POST'] çok önemli!
+@app.route('/verify', methods=['POST'])
 def verify_key():
     """Script'lerin key doğrulama API'si"""
     try:
-        # Gelen veriyi al
         data = request.get_json()
         if not data:
             return jsonify({"valid": False, "error": "No data provided"}), 400
@@ -42,25 +41,20 @@ def verify_key():
         if not key:
             return jsonify({"valid": False, "error": "No key provided"}), 400
         
-        # Veritabanını yükle
         db = load_db()
         
-        # Key var mı?
         if key not in db["keys"]:
             return jsonify({"valid": False, "error": "Invalid key"}), 200
         
         key_data = db["keys"][key]
         
-        # Süresi dolmuş mu?
         expires = datetime.fromisoformat(key_data["expires"])
         if expires < datetime.now():
             return jsonify({"valid": False, "error": "Key expired"}), 200
         
-        # HWID kontrolü (ilk kullanımda kaydeder)
         if "hwid" in key_data and key_data["hwid"] != hwid:
             return jsonify({"valid": False, "error": "Already used on another device"}), 200
         
-        # İlk kullanımda HWID kaydet
         if "hwid" not in key_data:
             key_data["hwid"] = hwid
             save_db(db)
@@ -545,7 +539,7 @@ async def clear_messages(ctx, amount: int = 100):
         await ctx.send(f"❌ Failed to delete messages: {e}", delete_after=3)
 
 # ======================================================================
-# REAKSIYON OLAYI
+# REAKSIYON OLAYI (ephemeral KALDIRILDI)
 # ======================================================================
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -587,6 +581,7 @@ async def on_reaction_add(reaction, user):
             print(f"❌ Rol oluşturma hatası: {e}")
             return
     
+    # Zaten role sahipse
     if role in member.roles:
         embed_already = discord.Embed(
             title="ℹ️ ALREADY HAVE ACCESS",
@@ -595,9 +590,10 @@ async def on_reaction_add(reaction, user):
             color=discord.Color.blue()
         )
         embed_already.set_footer(text="yigit keys | knife duels")
-        await reaction.message.channel.send(embed=embed_already, ephemeral=True)
+        await reaction.message.channel.send(embed=embed_already)
         return
     
+    # Rolü ver
     try:
         await member.add_roles(role)
         print(f"✅ {user.name} - {role.name} rolü verildi!")
@@ -619,9 +615,8 @@ async def on_reaction_add(reaction, user):
             inline=False
         )
         embed_success.set_footer(text="yigit keys | knife duels")
-        
-        await reaction.message.channel.send(embed=embed_success, ephemeral=True)
-        print(f"✅ {user.name} - Ephemeral rol bildirimi gönderildi!")
+        await reaction.message.channel.send(embed=embed_success)
+        print(f"✅ {user.name} - Rol bildirimi gönderildi!")
             
     except Exception as e:
         print(f"❌ Rol verme hatası: {e}")
@@ -630,7 +625,7 @@ async def on_reaction_add(reaction, user):
             description=f"Could not give you the **{role.name}** role. Please contact an admin.",
             color=discord.Color.red()
         )
-        await reaction.message.channel.send(embed=embed_error, ephemeral=True)
+        await reaction.message.channel.send(embed=embed_error)
 
 # ======================================================================
 # BOT ÇALIŞTIR
