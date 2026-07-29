@@ -6,7 +6,7 @@ import string
 import os
 from datetime import datetime, timedelta
 import asyncio
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify  # 🔥 request ve jsonify eklendi!
 import threading
 import psutil
 import time
@@ -25,12 +25,13 @@ def health():
     return "OK", 200
 
 # ======================================================================
-# API - KEY DOĞRULAMA (Script'ler için)
+# 🔥 API - KEY DOĞRULAMA (Script'ler için) - YENİ EKLENDİ
 # ======================================================================
-@app.route('/verify', methods=['POST'])
+@app.route('/verify', methods=['POST'])  # 🔥 methods=['POST'] çok önemli!
 def verify_key():
     """Script'lerin key doğrulama API'si"""
     try:
+        # Gelen veriyi al
         data = request.get_json()
         if not data:
             return jsonify({"valid": False, "error": "No data provided"}), 400
@@ -91,10 +92,10 @@ if not TOKEN:
 # ======================================================================
 # AYARLAR
 # ======================================================================
-AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Senin Discord ID'n
-STATUS_CHANNEL_ID = 1531992520547106930   # 🔥 Durum kanalı ID
-CLICKED_ROLE_ID = 1531968801308938250     # 🔥 Clicked rolü ID
-BOT_COMMAND_CHANNEL = 1531966775154180286 # 🔥 Bot komut kanalı ID
+AUTHORIZED_USER_ID = 1006507336426340364
+STATUS_CHANNEL_ID = 1531992520547106930
+CLICKED_ROLE_ID = 1531968801308938250
+BOT_COMMAND_CHANNEL = 1531966775154180286
 
 # ======================================================================
 # VERİTABANI
@@ -544,7 +545,7 @@ async def clear_messages(ctx, amount: int = 100):
         await ctx.send(f"❌ Failed to delete messages: {e}", delete_after=3)
 
 # ======================================================================
-# REAKSIYON OLAYI - EPHEMERAL
+# REAKSIYON OLAYI
 # ======================================================================
 @bot.event
 async def on_reaction_add(reaction, user):
