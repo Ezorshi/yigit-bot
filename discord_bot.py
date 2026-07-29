@@ -6,13 +6,13 @@ import string
 import os
 from datetime import datetime, timedelta
 import asyncio
-from flask import Flask
+from flask import Flask, request, jsonify
 import threading
 import psutil
 import time
 
 # ======================================================================
-# WEB SUNUCUSU (Render için)
+# WEB SUNUCUSU (Render için + API)
 # ======================================================================
 app = Flask(__name__)
 
@@ -23,6 +23,55 @@ def home():
 @app.route('/health')
 def health():
     return "OK", 200
+
+# ======================================================================
+# API - KEY DOĞRULAMA (Script'ler için)
+# ======================================================================
+@app.route('/verify', methods=['POST'])
+def verify_key():
+    """Script'lerin key doğrulama API'si"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"valid": False, "error": "No data provided"}), 400
+        
+        key = data.get('key')
+        hwid = data.get('hwid', 'unknown')
+        
+        if not key:
+            return jsonify({"valid": False, "error": "No key provided"}), 400
+        
+        # Veritabanını yükle
+        db = load_db()
+        
+        # Key var mı?
+        if key not in db["keys"]:
+            return jsonify({"valid": False, "error": "Invalid key"}), 200
+        
+        key_data = db["keys"][key]
+        
+        # Süresi dolmuş mu?
+        expires = datetime.fromisoformat(key_data["expires"])
+        if expires < datetime.now():
+            return jsonify({"valid": False, "error": "Key expired"}), 200
+        
+        # HWID kontrolü (ilk kullanımda kaydeder)
+        if "hwid" in key_data and key_data["hwid"] != hwid:
+            return jsonify({"valid": False, "error": "Already used on another device"}), 200
+        
+        # İlk kullanımda HWID kaydet
+        if "hwid" not in key_data:
+            key_data["hwid"] = hwid
+            save_db(db)
+        
+        return jsonify({
+            "valid": True,
+            "expires": key_data["expires"],
+            "message": "License valid!"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"valid": False, "error": str(e)}), 500
 
 def run_web():
     port = int(os.environ.get('PORT', 10000))
@@ -146,18 +195,16 @@ class KeyClaimButton(discord.ui.View):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 # ======================================================================
-# BOT (prefix y!) - Varsayılan help KALDIRILDI
+# BOT
 # ======================================================================
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
-
-# 🔥 help_command=None ile varsayılan help devre dışı
 bot = commands.Bot(command_prefix='y!', intents=intents, help_command=None)
 
 # ======================================================================
-# KANAL KONTROLÜ (Decorator)
+# KANAL KONTROLÜ
 # ======================================================================
 def command_channel_only():
     async def predicate(ctx):
@@ -298,19 +345,16 @@ async def status_loop():
             await asyncio.sleep(30)
 
 # ======================================================================
-# y!yardim - ÖZEL HELP (Varsayılan help kaldırıldı)
+# KOMUTLAR
 # ======================================================================
 @bot.command(name='yardim')
 @command_channel_only()
 async def help_command(ctx):
-    """Display all commands with categories"""
-    
     embed = discord.Embed(
         title="📋 YIGIT KEYS - COMMANDS",
         description="**Prefix:** `y!`\nAll commands must be used in <#1531966775154180286>",
         color=discord.Color.blue()
     )
-    
     embed.add_field(
         name="🎯 KEY & LICENSE",
         value=(
@@ -321,7 +365,6 @@ async def help_command(ctx):
         ),
         inline=False
     )
-    
     embed.add_field(
         name="👥 ACCESS & ROLES",
         value=(
@@ -330,7 +373,6 @@ async def help_command(ctx):
         ),
         inline=False
     )
-    
     embed.add_field(
         name="⚙️ ADMIN",
         value=(
@@ -339,7 +381,6 @@ async def help_command(ctx):
         ),
         inline=False
     )
-    
     embed.add_field(
         name="ℹ️ INFO",
         value=(
@@ -348,7 +389,6 @@ async def help_command(ctx):
         ),
         inline=False
     )
-    
     embed.add_field(
         name="📌 QUICK GUIDE",
         value=(
@@ -361,14 +401,9 @@ async def help_command(ctx):
         ),
         inline=False
     )
-    
     embed.set_footer(text="yigit keys | knife duels | v5.0")
-    
     await ctx.send(embed=embed)
 
-# ======================================================================
-# y!knife-duel
-# ======================================================================
 @bot.command(name='knife-duel')
 @command_channel_only()
 async def send_knife_duel_key(ctx):
@@ -397,9 +432,6 @@ async def send_knife_duel_key(ctx):
     await ctx.send(embed=embed, view=view)
     await ctx.send(f"✅ Knife Duels key message sent to this channel!")
 
-# ======================================================================
-# y!click-mesaj
-# ======================================================================
 @bot.command(name='click-mesaj')
 @command_channel_only()
 async def send_click_message(ctx):
@@ -416,7 +448,6 @@ async def send_click_message(ctx):
         description=f"React with ✅ below to get the **{role.name}** role and access **Knife Duels** keys!",
         color=discord.Color.blue()
     )
-    
     embed.add_field(
         name="🎯 HOW TO GET ACCESS",
         value=(
@@ -431,7 +462,6 @@ async def send_click_message(ctx):
         ),
         inline=False
     )
-    
     embed.add_field(
         name="📌 HOW TO USE",
         value=(
@@ -443,16 +473,12 @@ async def send_click_message(ctx):
         ),
         inline=True
     )
-    
     embed.set_footer(text=f"yigit keys | {role.name} | knife duels")
     
     message = await ctx.send(embed=embed)
     await message.add_reaction("✅")
     await ctx.send(f"✅ Knife Duels access message sent! React with ✅ to get the **{role.name}** role.")
 
-# ======================================================================
-# y!key-info
-# ======================================================================
 @bot.command(name='key-info')
 @command_channel_only()
 async def key_info(ctx):
@@ -492,9 +518,6 @@ async def key_info(ctx):
     
     await ctx.send(embed=embed)
 
-# ======================================================================
-# y!clear
-# ======================================================================
 @bot.command(name='clear')
 @command_channel_only()
 async def clear_messages(ctx, amount: int = 100):
@@ -571,7 +594,6 @@ async def on_reaction_add(reaction, user):
             color=discord.Color.blue()
         )
         embed_already.set_footer(text="yigit keys | knife duels")
-        
         await reaction.message.channel.send(embed=embed_already, ephemeral=True)
         return
     
@@ -610,7 +632,7 @@ async def on_reaction_add(reaction, user):
         await reaction.message.channel.send(embed=embed_error, ephemeral=True)
 
 # ======================================================================
-# KOMUTLARI SENKRONİZE ET
+# BOT ÇALIŞTIR
 # ======================================================================
 @bot.event
 async def on_ready():
@@ -630,9 +652,6 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Sync error: {e}")
 
-# ======================================================================
-# BOT ÇALIŞTIR
-# ======================================================================
 if __name__ == "__main__":
     print("🔪 Yigit Keys Bot starting...")
     bot.run(TOKEN)
