@@ -42,7 +42,7 @@ if not TOKEN:
 # ======================================================================
 # AYARLAR
 # ======================================================================
-AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Senin Discord ID'n (muaf)
+AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Senin Discord ID'n
 STATUS_CHANNEL_ID = 1531992520547106930   # 🔥 Durum kanalı ID
 CLICKED_ROLE_ID = 1531968801308938250     # 🔥 Clicked rolü ID
 BOT_COMMAND_CHANNEL = 1531966775154180286 # 🔥 Bot komut kanalı ID
@@ -71,21 +71,6 @@ def generate_key():
     return '-'.join(parts)
 
 # ======================================================================
-# KANAL KONTROLÜ (Decorator)
-# ======================================================================
-def command_channel_only():
-    async def predicate(ctx):
-        # Yetkili kullanıcı muaftır
-        if ctx.author.id == AUTHORIZED_USER_ID:
-            return True
-        # Kanal kontrolü
-        if ctx.channel.id == BOT_COMMAND_CHANNEL:
-            return True
-        await ctx.send("❌ This channel is not a bot command channel! Please use <#1531966775154180286>", delete_after=5)
-        return False
-    return commands.check(predicate)
-
-# ======================================================================
 # BUTON
 # ======================================================================
 class KeyClaimButton(discord.ui.View):
@@ -100,7 +85,6 @@ class KeyClaimButton(discord.ui.View):
         user_id = str(interaction.user.id)
         now = datetime.now()
         
-        # 24 saat kontrolü
         if user_id in db["last_key_time"]:
             last_time = datetime.fromisoformat(db["last_key_time"][user_id])
             if now - last_time < timedelta(hours=24):
@@ -115,7 +99,6 @@ class KeyClaimButton(discord.ui.View):
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
         
-        # Aktif lisans kontrolü
         if user_id in db["users"]:
             key_data = db["users"][user_id]
             if datetime.fromisoformat(key_data["expires"]) > now:
@@ -127,7 +110,6 @@ class KeyClaimButton(discord.ui.View):
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
         
-        # Yeni key (1 GÜN GEÇERLİ)
         new_key = generate_key()
         expires = now + timedelta(days=1)
         
@@ -164,19 +146,31 @@ class KeyClaimButton(discord.ui.View):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 # ======================================================================
-# BOT
+# BOT (prefix y!)
 # ======================================================================
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
-bot = commands.Bot(command_prefix='y!', intents=intents)  # 🔥 prefix y! oldu
+bot = commands.Bot(command_prefix='y!', intents=intents)
+
+# ======================================================================
+# KANAL KONTROLÜ (Decorator)
+# ======================================================================
+def command_channel_only():
+    async def predicate(ctx):
+        if ctx.author.id == AUTHORIZED_USER_ID:
+            return True
+        if ctx.channel.id == BOT_COMMAND_CHANNEL:
+            return True
+        await ctx.send("❌ This channel is not a bot command channel! Please use <#1531966775154180286>", delete_after=5)
+        return False
+    return commands.check(predicate)
 
 # ======================================================================
 # DURUM MESAJI (5 DAKİKADA BİR)
 # ======================================================================
 async def status_message_loop():
-    """Her 5 dakikada bir durum kanalına mesaj gönderir"""
     await bot.wait_until_ready()
     
     while not bot.is_closed():
@@ -189,7 +183,6 @@ async def status_message_loop():
             
             db = load_db()
             total_keys = len(db["keys"])
-            
             active_keys = 0
             now = datetime.now()
             for key, data in db["keys"].items():
@@ -197,13 +190,11 @@ async def status_message_loop():
                     active_keys += 1
             
             expired_keys = total_keys - active_keys
-            
             total_members = 0
             for guild in bot.guilds:
                 total_members += guild.member_count or 0
             
             ping = round(bot.latency * 1000)
-            
             uptime = time.time() - bot.uptime if hasattr(bot, 'uptime') else 0
             uptime_str = str(timedelta(seconds=int(uptime)))
             
@@ -305,55 +296,82 @@ async def status_loop():
             await asyncio.sleep(30)
 
 # ======================================================================
-# y!help KOMUTU
+# y!help - GELİŞMİŞ KATEGORİLİ
 # ======================================================================
 @bot.command(name='help')
 @command_channel_only()
 async def help_command(ctx):
-    """Tüm komutları gösterir"""
+    """Display all commands with categories"""
     
     embed = discord.Embed(
         title="📋 YIGIT KEYS - COMMANDS",
-        description="All commands must be used in <#1531966775154180286>",
+        description="**Prefix:** `y!`\nAll commands must be used in <#1531966775154180286>",
         color=discord.Color.blue()
     )
     
+    # 🎯 KEY & LICENSE
     embed.add_field(
-        name="🔑 **y!knife-duel**",
-        value="Send Knife Duels key claim message with CLAIM KEY button",
+        name="🎯 KEY & LICENSE",
+        value=(
+            "**y!knife-duel**\n"
+            "└ Send Knife Duels key claim message with CLAIM KEY button\n\n"
+            "**y!key-info**\n"
+            "└ Check your Knife Duels license key information"
+        ),
         inline=False
     )
     
+    # 👥 ACCESS & ROLES
     embed.add_field(
-        name="🎯 **y!click-mesaj**",
-        value="Send access message with ✅ reaction to get clicked role",
+        name="👥 ACCESS & ROLES",
+        value=(
+            "**y!click-mesaj**\n"
+            "└ Send access message with ✅ reaction to get clicked role"
+        ),
         inline=False
     )
     
+    # ⚙️ ADMIN
     embed.add_field(
-        name="ℹ️ **y!key-info**",
-        value="Check your Knife Duels license key info",
+        name="⚙️ ADMIN",
+        value=(
+            "**y!clear [amount]**\n"
+            "└ Delete messages (max 100) - Admin only"
+        ),
         inline=False
     )
     
+    # ℹ️ INFO
     embed.add_field(
-        name="🗑️ **y!clear [amount]**",
-        value="Delete messages (max 100) - Admin only",
+        name="ℹ️ INFO",
+        value=(
+            "**y!help**\n"
+            "└ Show this help menu"
+        ),
         inline=False
     )
     
+    # 📌 QUICK GUIDE
     embed.add_field(
-        name="📋 **y!help**",
-        value="Show this help menu",
+        name="📌 QUICK GUIDE",
+        value=(
+            "1️⃣ `y!click-mesaj` → React ✅ to get **clicked** role\n"
+            "2️⃣ Access **#knife-duels-key** channel\n"
+            "3️⃣ `y!knife-duel` → Click **CLAIM KEY**\n"
+            "4️⃣ `y!key-info` → Check your license\n\n"
+            "⚡ **1 key per 24 hours**\n"
+            "⏰ **24 hours validity**"
+        ),
         inline=False
     )
     
     embed.set_footer(text="yigit keys | knife duels | v5.0")
+    embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/...")
     
     await ctx.send(embed=embed)
 
 # ======================================================================
-# y!knife-duel KOMUTU
+# y!knife-duel
 # ======================================================================
 @bot.command(name='knife-duel')
 @command_channel_only()
@@ -384,13 +402,11 @@ async def send_knife_duel_key(ctx):
     await ctx.send(f"✅ Knife Duels key message sent to this channel!")
 
 # ======================================================================
-# y!click-mesaj KOMUTU
+# y!click-mesaj
 # ======================================================================
 @bot.command(name='click-mesaj')
 @command_channel_only()
 async def send_click_message(ctx):
-    """Knife Duels access mesajı - Sadece yetkili"""
-    
     if ctx.author.id != AUTHORIZED_USER_ID:
         return
     
@@ -439,13 +455,11 @@ async def send_click_message(ctx):
     await ctx.send(f"✅ Knife Duels access message sent! React with ✅ to get the **{role.name}** role.")
 
 # ======================================================================
-# y!key-info KOMUTU
+# y!key-info
 # ======================================================================
 @bot.command(name='key-info')
 @command_channel_only()
 async def key_info(ctx):
-    """Kullanıcının kendi lisans bilgilerini gösterir"""
-    
     db = load_db()
     user_id = str(ctx.author.id)
     
@@ -483,13 +497,11 @@ async def key_info(ctx):
     await ctx.send(embed=embed)
 
 # ======================================================================
-# y!clear KOMUTU
+# y!clear
 # ======================================================================
 @bot.command(name='clear')
 @command_channel_only()
 async def clear_messages(ctx, amount: int = 100):
-    """Son X mesajı siler - Sadece yetkili"""
-    
     if ctx.author.id != AUTHORIZED_USER_ID:
         await ctx.send("❌ You don't have permission to use this command!")
         return
@@ -513,12 +525,10 @@ async def clear_messages(ctx, amount: int = 100):
         await ctx.send(f"❌ Failed to delete messages: {e}", delete_after=3)
 
 # ======================================================================
-# REAKSIYON OLAYI - 3 SANİYE SONRA SİL
+# REAKSIYON OLAYI - EPHEMERAL (SADECE KULLANICI GÖRÜR)
 # ======================================================================
 @bot.event
 async def on_reaction_add(reaction, user):
-    """Kullanıcı ✅ tepkisi verdiğinde clicked rolünü ver - 3 saniye sonra sil"""
-    
     if user.bot:
         return
     
@@ -557,21 +567,28 @@ async def on_reaction_add(reaction, user):
             print(f"❌ Rol oluşturma hatası: {e}")
             return
     
+    # Zaten role sahipse - EPHEMERAL uyarı
     if role in member.roles:
-        msg = await reaction.message.channel.send(
-            f"ℹ️ {user.mention} You already have the **{role.name}** role! Access **#knife-duels-key** channel."
+        embed_already = discord.Embed(
+            title="ℹ️ ALREADY HAVE ACCESS",
+            description=f"You already have the **{role.name}** role!\n\n"
+                        f"🔑 Access **#knife-duels-key** channel for your key.",
+            color=discord.Color.blue()
         )
-        await asyncio.sleep(3)
-        await msg.delete()
+        embed_already.set_footer(text="yigit keys | knife duels")
+        
+        await reaction.message.channel.send(embed=embed_already, ephemeral=True)
         return
     
+    # Rolü ver
     try:
         await member.add_roles(role)
         print(f"✅ {user.name} - {role.name} rolü verildi!")
         
+        # EPHEMERAL başarı mesajı (sadece kullanıcı görür)
         embed_success = discord.Embed(
             title="✅ ROLE GRANTED!",
-            description=f"{user.mention} You have been given the **{role.name}** role!",
+            description=f"You have been given the **{role.name}** role!",
             color=discord.Color.green()
         )
         embed_success.add_field(
@@ -587,20 +604,17 @@ async def on_reaction_add(reaction, user):
         )
         embed_success.set_footer(text="yigit keys | knife duels")
         
-        msg = await reaction.message.channel.send(embed=embed_success)
-        
-        # 🔥 3 saniye sonra sil
-        await asyncio.sleep(3)
-        await msg.delete()
-        print(f"✅ {user.name} - Mesaj 3 saniye sonra silindi!")
+        await reaction.message.channel.send(embed=embed_success, ephemeral=True)
+        print(f"✅ {user.name} - Ephemeral rol bildirimi gönderildi!")
             
     except Exception as e:
         print(f"❌ Rol verme hatası: {e}")
-        msg = await reaction.message.channel.send(
-            f"❌ {user.mention} Could not give you the **{role.name}** role. Please contact an admin."
+        embed_error = discord.Embed(
+            title="❌ ERROR",
+            description=f"Could not give you the **{role.name}** role. Please contact an admin.",
+            color=discord.Color.red()
         )
-        await asyncio.sleep(5)
-        await msg.delete()
+        await reaction.message.channel.send(embed=embed_error, ephemeral=True)
 
 # ======================================================================
 # KOMUTLARI SENKRONİZE ET
