@@ -10,7 +10,7 @@ from flask import Flask
 import threading
 
 # ======================================================================
-# WEB SUNUCUSU
+# WEB SUNUCUSU (Render için)
 # ======================================================================
 app = Flask(__name__)
 
@@ -40,8 +40,7 @@ if not TOKEN:
 # ======================================================================
 # AYARLAR
 # ======================================================================
-AUTHORIZED_USER_ID = 1006507336426340364
-VOICE_CHANNEL_ID = 1531981051646181468  # 🔥 Working kanalı
+AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Sadece senin ID'n
 
 # ======================================================================
 # VERİTABANI
@@ -151,67 +150,6 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ======================================================================
-# SES KANALINA KATIL (GELİŞMİŞ)
-# ======================================================================
-async def join_voice_channel():
-    await bot.wait_until_ready()
-    
-    try:
-        print(f"🔍 Ses kanalı aranıyor: {VOICE_CHANNEL_ID}")
-        
-        # Kanalı bul
-        channel = bot.get_channel(VOICE_CHANNEL_ID)
-        if not channel:
-            print(f"❌ Ses kanalı bulunamadi! ID: {VOICE_CHANNEL_ID}")
-            print(f"📌 Mevcut kanallar:")
-            for guild in bot.guilds:
-                for ch in guild.channels:
-                    if ch.type == discord.ChannelType.voice:
-                        print(f"   - {ch.name} (ID: {ch.id})")
-            return
-        
-        print(f"✅ Ses kanalı bulundu: {channel.name}")
-        
-        # Zaten bağlı mı kontrol et
-        for guild in bot.guilds:
-            if guild.voice_client:
-                if guild.voice_client.channel.id == VOICE_CHANNEL_ID:
-                    print(f"✅ Bot zaten ses kanalında: {channel.name}")
-                    return
-                else:
-                    print(f"❌ Eski kanaldan ayrılıyor: {guild.voice_client.channel.name}")
-                    await guild.voice_client.disconnect()
-                    await asyncio.sleep(1)
-        
-        # Bağlan
-        print(f"🔗 Ses kanalına bağlanılıyor: {channel.name}")
-        vc = await channel.connect(timeout=30)
-        
-        if vc:
-            print(f"✅ Bot ses kanalına katıldı: {channel.name}")
-            # Mikrofonu kapat, sağır ol
-            await vc.guild.change_voice_state(
-                channel=channel, 
-                self_mute=True, 
-                self_deaf=True
-            )
-            print(f"🔇 Bot mikrofon kapalı, sağır modda")
-        else:
-            print(f"❌ Bağlantı başarısız!")
-            
-    except discord.Forbidden:
-        print(f"❌ Yetki hatası! Bot'un ses kanalına bağlanma izni yok!")
-        print(f"📌 Bot'a şu yetkileri ver:")
-        print(f"   - Connect (Bağlanma)")
-        print(f"   - Speak (Konuşma)")
-        print(f"   - Use Voice Activity")
-    except discord.NotFound:
-        print(f"❌ Ses kanalı bulunamadi! ID: {VOICE_CHANNEL_ID}")
-    except Exception as e:
-        print(f"❌ Ses kanalına katılma hatasi: {e}")
-        print(f"📌 Hata tipi: {type(e).__name__}")
-
-# ======================================================================
 # DURUM DÖNGÜSÜ
 # ======================================================================
 async def status_loop():
@@ -245,28 +183,69 @@ async def status_loop():
             await asyncio.sleep(30)
 
 # ======================================================================
-# KOMUTLAR
+# KOMUT: !sese-katil (SADECE SEN)
 # ======================================================================
-@bot.event
-async def on_ready():
-    print(f'✅ Bot hazir! {bot.user}')
-    print(f'📊 {len(bot.guilds)} sunucuda aktif')
+@bot.command(name='sese-katil')
+async def join_voice(ctx, channel_id: str = None):
+    """Ses kanalına katıl - Sadece yetkili"""
     
+    # Yetki kontrolü
+    if ctx.author.id != AUTHORIZED_USER_ID:
+        await ctx.send("❌ Bu komutu kullanma yetkin yok!")
+        return
+    
+    # ID kontrolü
+    if not channel_id:
+        await ctx.send("❌ Kanal ID'si girmelisin!\nKullanım: `!sese-katil 123456789`")
+        return
+    
+    try:
+        channel_id = int(channel_id)
+    except:
+        await ctx.send("❌ Geçersiz ID! Sadece sayı girmelisin.")
+        return
+    
+    # Kanalı bul
+    channel = bot.get_channel(channel_id)
+    if not channel:
+        await ctx.send(f"❌ Kanal bulunamadı! ID: {channel_id}")
+        return
+    
+    # Ses kanalı mı kontrol et
+    if channel.type != discord.ChannelType.voice:
+        await ctx.send(f"❌ Bu kanal bir ses kanalı değil! ({channel.name})")
+        return
+    
+    # Zaten bağlı mı?
     for guild in bot.guilds:
-        print(f'📌 {guild.name} - {guild.member_count} üye')
-        # Ses kanallarını listele
-        for ch in guild.channels:
-            if ch.type == discord.ChannelType.voice:
-                print(f"   🔊 {ch.name} (ID: {ch.id})")
+        if guild.voice_client:
+            if guild.voice_client.channel.id == channel_id:
+                await ctx.send(f"✅ Bot zaten bu kanalda: {channel.name}")
+                return
+            else:
+                # Başka kanaldaysa ayrıl
+                await guild.voice_client.disconnect()
+                await asyncio.sleep(1)
     
-    bot.loop.create_task(status_loop())
-    
-    # Ses kanalına katıl (5 saniye sonra)
-    await asyncio.sleep(5)
-    await join_voice_channel()
+    # Bağlan
+    try:
+        vc = await channel.connect(timeout=30)
+        await ctx.send(f"✅ Bot ses kanalına katıldı: {channel.name}")
+        
+        # Mikrofonu kapat, sağır ol
+        if vc:
+            await vc.guild.change_voice_state(
+                channel=channel,
+                self_mute=True,
+                self_deaf=True
+            )
+        await ctx.send(f"🔇 Bot mikrofon kapalı, sağır modda")
+        
+    except Exception as e:
+        await ctx.send(f"❌ Bağlanırken hata: {str(e)}")
 
 # ======================================================================
-# !KNIFE-DUEL KOMUTU
+# KOMUT: !knife-duel
 # ======================================================================
 @bot.command(name='knife-duel')
 async def send_knife_duel_key(ctx):
@@ -338,10 +317,18 @@ async def slash_keyinfo(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # ======================================================================
-# SLASH KOMUTLARI SENKRONİZE ET
+# KOMUTLARI SENKRONİZE ET
 # ======================================================================
 @bot.event
-async def on_connect():
+async def on_ready():
+    print(f'✅ Bot hazir! {bot.user}')
+    print(f'📊 {len(bot.guilds)} sunucuda aktif')
+    for guild in bot.guilds:
+        print(f'📌 {guild.name} - {guild.member_count} üye')
+    
+    bot.loop.create_task(status_loop())
+    
+    # Slash komutları senkronize et
     try:
         await bot.tree.sync()
         print("✅ Slash komutlar senkronize edildi!")
