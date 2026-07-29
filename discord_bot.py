@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 import asyncio
 from flask import Flask
 import threading
+import psutil
+import time
 
 # ======================================================================
 # WEB SUNUCUSU (Render için)
@@ -40,7 +42,8 @@ if not TOKEN:
 # ======================================================================
 # AYARLAR
 # ======================================================================
-AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Sadece senin ID'n
+AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Senin Discord ID'n
+STATUS_CHANNEL_ID = 1531992520547106930   # 🔥 Durum mesajlarının gönderileceği kanal
 
 # ======================================================================
 # VERİTABANI
@@ -146,11 +149,110 @@ class KeyClaimButton(discord.ui.View):
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
-intents.voice_states = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ======================================================================
-# DURUM DÖNGÜSÜ
+# DURUM DÖNGÜSÜ (5 DAKİKADA BİR MESAJ GÖNDER)
+# ======================================================================
+async def status_message_loop():
+    """Her 5 dakikada bir durum kanalına mesaj gönderir"""
+    await bot.wait_until_ready()
+    
+    while not bot.is_closed():
+        try:
+            # Kanalı bul
+            channel = bot.get_channel(STATUS_CHANNEL_ID)
+            if not channel:
+                print(f"❌ Durum kanalı bulunamadi! ID: {STATUS_CHANNEL_ID}")
+                await asyncio.sleep(60)
+                continue
+            
+            # Veritabanından bilgileri al
+            db = load_db()
+            total_keys = len(db["keys"])
+            
+            # Aktif key sayısı
+            active_keys = 0
+            now = datetime.now()
+            for key, data in db["keys"].items():
+                if datetime.fromisoformat(data["expires"]) > now:
+                    active_keys += 1
+            
+            # Süresi dolan key sayısı
+            expired_keys = total_keys - active_keys
+            
+            # Toplam üye sayısı
+            total_members = 0
+            for guild in bot.guilds:
+                total_members += guild.member_count or 0
+            
+            # Bot'un ping'i
+            ping = round(bot.latency * 1000)
+            
+            # Çalışma süresi
+            uptime = time.time() - bot.uptime if hasattr(bot, 'uptime') else 0
+            uptime_str = str(timedelta(seconds=int(uptime)))
+            
+            # Embed mesajı oluştur
+            embed = discord.Embed(
+                title="⚡ YIGIT SCRIPT v5.0 | KNIFE DUELS",
+                description="**Bot Durumu:** 🟢 Çalışıyor",
+                color=discord.Color.green(),
+                timestamp=datetime.now()
+            )
+            
+            embed.add_field(
+                name="📊 Sunucu Bilgileri",
+                value=f"├─ 👥 Toplam Üye: **{total_members}**\n"
+                      f"├─ 🔑 Oluşturulan Key: **{total_keys}**\n"
+                      f"├─ ✅ Aktif Key: **{active_keys}**\n"
+                      f"└─ ⏰ Süresi Dolan: **{expired_keys}**",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="💾 Sistem Bilgileri",
+                value=f"├─ 📡 Ping: **{ping}ms**\n"
+                      f"├─ ⏱️ Çalışma Süresi: **{uptime_str}**\n"
+                      f"├─ 💻 CPU: **%{psutil.cpu_percent()}**\n"
+                      f"└─ 🧠 RAM: **{psutil.virtual_memory().used // (1024**3)}GB / {psutil.virtual_memory().total // (1024**3)}GB**",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="✨ Premium Features",
+                value="• Auto Aim\n"
+                      "• ESP & Glow\n"
+                      "• Rage Mode\n"
+                      "• Visual Effects\n"
+                      "• Triggerbot\n"
+                      "• 24h Keys",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="🔗 Nasıl Key Alınır?",
+                value="**CLAIM KEY** butonuna tıkla veya `/keyinfo` yaz.",
+                inline=True
+            )
+            
+            embed.set_footer(
+                text="yigit script | Knife Duels | 24h keys",
+                icon_url="https://cdn.discordapp.com/attachments/..."  # İkon ekleyebilirsin
+            )
+            
+            # Mesajı gönder
+            await channel.send(embed=embed)
+            print(f"✅ Durum mesajı gönderildi: {datetime.now().strftime('%H:%M:%S')}")
+            
+        except Exception as e:
+            print(f"❌ Durum mesajı hatasi: {e}")
+        
+        # 5 dakika bekle (300 saniye)
+        await asyncio.sleep(300)
+
+# ======================================================================
+# DURUM DÖNGÜSÜ (Bot'un status'u için)
 # ======================================================================
 async def status_loop():
     await bot.wait_until_ready()
@@ -181,68 +283,6 @@ async def status_loop():
         except Exception as e:
             print(f"❌ Durum güncelleme hatasi: {e}")
             await asyncio.sleep(30)
-
-# ======================================================================
-# KOMUT: !sese-katil (SADECE SEN)
-# ======================================================================
-@bot.command(name='sese-katil')
-async def join_voice(ctx, channel_id: str = None):
-    """Ses kanalına katıl - Sadece yetkili"""
-    
-    # Yetki kontrolü
-    if ctx.author.id != AUTHORIZED_USER_ID:
-        await ctx.send("❌ Bu komutu kullanma yetkin yok!")
-        return
-    
-    # ID kontrolü
-    if not channel_id:
-        await ctx.send("❌ Kanal ID'si girmelisin!\nKullanım: `!sese-katil 123456789`")
-        return
-    
-    try:
-        channel_id = int(channel_id)
-    except:
-        await ctx.send("❌ Geçersiz ID! Sadece sayı girmelisin.")
-        return
-    
-    # Kanalı bul
-    channel = bot.get_channel(channel_id)
-    if not channel:
-        await ctx.send(f"❌ Kanal bulunamadı! ID: {channel_id}")
-        return
-    
-    # Ses kanalı mı kontrol et
-    if channel.type != discord.ChannelType.voice:
-        await ctx.send(f"❌ Bu kanal bir ses kanalı değil! ({channel.name})")
-        return
-    
-    # Zaten bağlı mı?
-    for guild in bot.guilds:
-        if guild.voice_client:
-            if guild.voice_client.channel.id == channel_id:
-                await ctx.send(f"✅ Bot zaten bu kanalda: {channel.name}")
-                return
-            else:
-                # Başka kanaldaysa ayrıl
-                await guild.voice_client.disconnect()
-                await asyncio.sleep(1)
-    
-    # Bağlan
-    try:
-        vc = await channel.connect(timeout=30)
-        await ctx.send(f"✅ Bot ses kanalına katıldı: {channel.name}")
-        
-        # Mikrofonu kapat, sağır ol
-        if vc:
-            await vc.guild.change_voice_state(
-                channel=channel,
-                self_mute=True,
-                self_deaf=True
-            )
-        await ctx.send(f"🔇 Bot mikrofon kapalı, sağır modda")
-        
-    except Exception as e:
-        await ctx.send(f"❌ Bağlanırken hata: {str(e)}")
 
 # ======================================================================
 # KOMUT: !knife-duel
@@ -326,9 +366,13 @@ async def on_ready():
     for guild in bot.guilds:
         print(f'📌 {guild.name} - {guild.member_count} üye')
     
-    bot.loop.create_task(status_loop())
+    # Bot'un başlangıç zamanını kaydet
+    bot.uptime = time.time()
     
-    # Slash komutları senkronize et
+    # Durum döngülerini başlat
+    bot.loop.create_task(status_loop())
+    bot.loop.create_task(status_message_loop())
+    
     try:
         await bot.tree.sync()
         print("✅ Slash komutlar senkronize edildi!")
