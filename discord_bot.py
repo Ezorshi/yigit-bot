@@ -342,7 +342,7 @@ async def status_loop():
 # ======================================================================
 # KOMUTLAR
 # ======================================================================
-@bot.command(name='yardim')
+@bot.command(name='help')
 @command_channel_only()
 async def help_command(ctx):
     embed = discord.Embed(
