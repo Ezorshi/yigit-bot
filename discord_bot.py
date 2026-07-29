@@ -16,6 +16,11 @@ if not TOKEN:
     exit(1)
 
 # ======================================================================
+# KANAL ID (Kendi kanal ID'ni buraya yaz)
+# ======================================================================
+TARGET_CHANNEL_ID = 1531977391679995994  # 🔥 Senin kanal ID'n
+
+# ======================================================================
 # VERITABANI
 # ======================================================================
 DB_FILE = "keys.json"
@@ -50,15 +55,13 @@ class KeyClaimButton(discord.ui.View):
     
     @discord.ui.button(label="🎯 CLAIM KEY", style=discord.ButtonStyle.primary, custom_id="claim_key")
     async def claim_key(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Key claim butonu - Sadece tıklayan kişi görür"""
-        
         await interaction.response.defer(ephemeral=True)
         
         db = load_db()
         user_id = str(interaction.user.id)
         now = datetime.now()
         
-        # ===== 24 SAAT KONTROLÜ (Key alma aralığı) =====
+        # 24 saat kontrolü
         if user_id in db["last_key_time"]:
             last_time = datetime.fromisoformat(db["last_key_time"][user_id])
             time_diff = now - last_time
@@ -76,7 +79,7 @@ class KeyClaimButton(discord.ui.View):
                 await interaction.followup.send(embed=embed)
                 return
         
-        # ===== AKTIF LISANS KONTROLÜ (24 saat geçerli) =====
+        # Aktif lisans kontrolü
         if user_id in db["users"]:
             key_data = db["users"][user_id]
             expires = datetime.fromisoformat(key_data["expires"])
@@ -89,9 +92,9 @@ class KeyClaimButton(discord.ui.View):
                 await interaction.followup.send(embed=embed)
                 return
         
-        # ===== YENI KEY OLUŞTUR (1 GÜN GEÇERLİ) =====
+        # Yeni key (1 GÜN GEÇERLİ)
         new_key = generate_key()
-        expires = now + timedelta(days=1)  # 🔥 1 GÜN
+        expires = now + timedelta(days=1)
         
         db["keys"][new_key] = {
             "user": user_id,
@@ -106,7 +109,6 @@ class KeyClaimButton(discord.ui.View):
         db["last_key_time"][user_id] = now.isoformat()
         save_db(db)
         
-        # ===== EPHEMERAL MESAJ =====
         embed = discord.Embed(
             title="🔑 YOUR KNIFE DUELS LICENSE",
             description=f"```\n{new_key}\n```",
@@ -128,7 +130,6 @@ class KeyClaimButton(discord.ui.View):
             inline=False
         )
         embed.set_footer(text="yigit script v5.0 | 1 key per 24h | 24h validity")
-        embed.color = discord.Color.green()
         
         await interaction.followup.send(embed=embed)
 
@@ -146,7 +147,7 @@ async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="/keylist | Claim your 24h key!"
+            name="!mesaji-gonder | Knife Duels"
         )
     )
     try:
@@ -156,22 +157,26 @@ async def on_ready():
         print(f"❌ Slash komut senkronizasyon hatasi: {e}")
 
 # ======================================================================
-# FORUM KANALI KOMUTU (Key Claim Mesajını Gönder)
+# !MESAJI-GONDER KOMUTU (Sadece sen kullanabilirsin)
 # ======================================================================
-@tree.command(name="keylist", description="Knife Duels key claim page (Admin)")
-@app_commands.default_permissions(administrator=True)
-async def slash_keylist(interaction: discord.Interaction):
-    """Key claim sayfasını gönderir"""
+@bot.command(name='mesaji-gonder')
+async def send_key_message(ctx):
+    """Key claim mesajını belirtilen kanala gönderir"""
     
-    if not interaction.user.guild_permissions.administrator:
-        embed = discord.Embed(
-            title="❌ Permission Denied!",
-            description="You need Admin permissions to use this command.",
-            color=discord.Color.red()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+    # Sadece senin kullanabilmen için ID kontrolü
+    AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Senin Discord ID'n
+    
+    if ctx.author.id != AUTHORIZED_USER_ID:
+        await ctx.send("❌ Bu komutu kullanma yetkin yok!", ephemeral=True)
         return
     
+    # Hedef kanalı bul
+    target_channel = bot.get_channel(TARGET_CHANNEL_ID)
+    if not target_channel:
+        await ctx.send(f"❌ Kanal bulunamadı! ID: {TARGET_CHANNEL_ID}")
+        return
+    
+    # Mesajı oluştur
     embed = discord.Embed(
         title="🔑 KNIFE DUELS LICENSE KEY",
         description="Click the button below to claim your **Knife Duels** license key.\n\n"
@@ -190,22 +195,22 @@ async def slash_keylist(interaction: discord.Interaction):
     
     view = KeyClaimButton()
     
-    await interaction.response.send_message(embed=embed, view=view)
+    # Mesajı gönder
+    await target_channel.send(embed=embed, view=view)
+    await ctx.send(f"✅ Mesaj başarıyla <#{TARGET_CHANNEL_ID}> kanalına gönderildi!")
 
 # ======================================================================
-# /KEY KOMUTU (Alternatif)
+# SLASH KOMUTLAR
 # ======================================================================
+
 @tree.command(name="key", description="Get your 24h Knife Duels license key")
 async def slash_key(interaction: discord.Interaction):
-    """Yeni lisans anahtarı al - 24s 1 key, 1 gün geçerli"""
-    
     await interaction.response.defer(ephemeral=True)
     
     db = load_db()
     user_id = str(interaction.user.id)
     now = datetime.now()
     
-    # 24 saat kontrolü (key alma aralığı)
     if user_id in db["last_key_time"]:
         last_time = datetime.fromisoformat(db["last_key_time"][user_id])
         time_diff = now - last_time
@@ -223,7 +228,6 @@ async def slash_key(interaction: discord.Interaction):
             await interaction.followup.send(embed=embed)
             return
     
-    # Aktif lisans kontrolü (1 gün geçerli)
     if user_id in db["users"]:
         key_data = db["users"][user_id]
         expires = datetime.fromisoformat(key_data["expires"])
@@ -236,7 +240,6 @@ async def slash_key(interaction: discord.Interaction):
             await interaction.followup.send(embed=embed)
             return
     
-    # Yeni key (1 GÜN GEÇERLİ)
     new_key = generate_key()
     expires = now + timedelta(days=1)
     
@@ -264,11 +267,6 @@ async def slash_key(interaction: discord.Interaction):
         inline=False
     )
     embed.add_field(
-        name="📝 How to Use",
-        value="Enter this key when the script asks for a license.",
-        inline=False
-    )
-    embed.add_field(
         name="⏳ Next Key",
         value=f"{now.strftime('%d.%m.%Y %H:%M')} + 24 hours",
         inline=False
@@ -277,13 +275,8 @@ async def slash_key(interaction: discord.Interaction):
     
     await interaction.followup.send(embed=embed)
 
-# ======================================================================
-# /KEYINFO KOMUTU
-# ======================================================================
 @tree.command(name="keyinfo", description="Check your 24h license key info")
 async def slash_keyinfo(interaction: discord.Interaction):
-    """Kendi lisans bilgilerini göster"""
-    
     await interaction.response.defer(ephemeral=True)
     
     db = load_db()
@@ -302,7 +295,6 @@ async def slash_keyinfo(interaction: discord.Interaction):
     expires = datetime.fromisoformat(key_data["expires"])
     is_expired = expires < datetime.now()
     
-    # Kalan süreyi hesapla
     if not is_expired:
         remaining = expires - datetime.now()
         hours = int(remaining.total_seconds() // 3600)
@@ -328,8 +320,6 @@ async def slash_keyinfo(interaction: discord.Interaction):
 @tree.command(name="admin_keylist", description="List all keys (Admin only)")
 @app_commands.default_permissions(administrator=True)
 async def admin_keylist(interaction: discord.Interaction):
-    """Tüm lisansları listele"""
-    
     await interaction.response.defer(ephemeral=True)
     
     if not interaction.user.guild_permissions.administrator:
@@ -363,7 +353,6 @@ async def admin_keylist(interaction: discord.Interaction):
         except:
             username = "Unknown"
         
-        # Kalan süre
         if not is_expired:
             remaining = expires - datetime.now()
             hours = int(remaining.total_seconds() // 3600)
@@ -384,8 +373,6 @@ async def admin_keylist(interaction: discord.Interaction):
 @tree.command(name="admin_keycancel", description="Cancel a license (Admin only)")
 @app_commands.default_permissions(administrator=True)
 async def admin_keycancel(interaction: discord.Interaction, key: str):
-    """Lisansı iptal et"""
-    
     await interaction.response.defer(ephemeral=True)
     
     if not interaction.user.guild_permissions.administrator:
