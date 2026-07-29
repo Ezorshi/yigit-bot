@@ -356,7 +356,9 @@ async def help_command(ctx):
             "**y!knife-duel**\n"
             "└ Send Knife Duels key claim message with CLAIM KEY button\n\n"
             "**y!key-info**\n"
-            "└ Check your Knife Duels license key information"
+            "└ Check your Knife Duels license key information\n\n"
+            "**/verify** (Slash Command)\n"
+            "└ Check any license key status"
         ),
         inline=False
     )
@@ -539,7 +541,64 @@ async def clear_messages(ctx, amount: int = 100):
         await ctx.send(f"❌ Failed to delete messages: {e}", delete_after=3)
 
 # ======================================================================
-# REAKSIYON OLAYI (ephemeral KALDIRILDI)
+# /verify KOMUTU (KEY KONTROLÜ)
+# ======================================================================
+@bot.tree.command(name="verify", description="Check your Knife Duels license key status")
+async def slash_verify(interaction: discord.Interaction, key: str):
+    """Verilen key'in durumunu gösterir"""
+    
+    db = load_db()
+    
+    # Key var mı?
+    if key not in db["keys"]:
+        embed = discord.Embed(
+            title="🔑 KEY CHECK",
+            description=f"**Key:** `{key}`\n**Status:** ❌ Invalid",
+            color=discord.Color.red()
+        )
+        embed.set_footer(text="yigit keys | knife duels")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    key_data = db["keys"][key]
+    expires = datetime.fromisoformat(key_data["expires"])
+    is_expired = expires < datetime.now()
+    
+    # Kalan süreyi hesapla
+    if not is_expired:
+        remaining = expires - datetime.now()
+        hours = int(remaining.total_seconds() // 3600)
+        minutes = int((remaining.total_seconds() % 3600) // 60)
+        time_left = f"{hours}h {minutes}m"
+        status = "✅ Active"
+        color = discord.Color.green()
+    else:
+        time_left = "EXPIRED"
+        status = "❌ Expired"
+        color = discord.Color.red()
+    
+    # HWID bilgisi
+    hwid = key_data.get("hwid", "Not used yet")
+    if hwid != "Not used yet":
+        hwid = f"`{hwid[:10]}...`"
+    
+    # Embed oluştur
+    embed = discord.Embed(
+        title="🔑 LICENSE KEY CHECK",
+        color=color
+    )
+    embed.add_field(name="Key", value=f"`{key}`", inline=False)
+    embed.add_field(name="Status", value=status, inline=True)
+    embed.add_field(name="Time Left", value=time_left, inline=True)
+    embed.add_field(name="Expires", value=expires.strftime('%d.%m.%Y %H:%M'), inline=True)
+    embed.add_field(name="HWID", value=hwid, inline=True)
+    embed.add_field(name="Created", value=datetime.fromisoformat(key_data["created"]).strftime('%d.%m.%Y %H:%M'), inline=True)
+    embed.set_footer(text="yigit keys | knife duels")
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# ======================================================================
+# REAKSIYON OLAYI
 # ======================================================================
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -581,7 +640,6 @@ async def on_reaction_add(reaction, user):
             print(f"❌ Rol oluşturma hatası: {e}")
             return
     
-    # Zaten role sahipse
     if role in member.roles:
         embed_already = discord.Embed(
             title="ℹ️ ALREADY HAVE ACCESS",
@@ -593,7 +651,6 @@ async def on_reaction_add(reaction, user):
         await reaction.message.channel.send(embed=embed_already)
         return
     
-    # Rolü ver
     try:
         await member.add_roles(role)
         print(f"✅ {user.name} - {role.name} rolü verildi!")
