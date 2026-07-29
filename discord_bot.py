@@ -146,13 +146,15 @@ class KeyClaimButton(discord.ui.View):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 # ======================================================================
-# BOT (prefix y!)
+# BOT (prefix y!) - Varsayılan help KALDIRILDI
 # ======================================================================
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
-bot = commands.Bot(command_prefix='y!', intents=intents)
+
+# 🔥 help_command=None ile varsayılan help devre dışı
+bot = commands.Bot(command_prefix='y!', intents=intents, help_command=None)
 
 # ======================================================================
 # KANAL KONTROLÜ (Decorator)
@@ -296,7 +298,7 @@ async def status_loop():
             await asyncio.sleep(30)
 
 # ======================================================================
-# y!yardim - GELİŞMİŞ KATEGORİLİ (help çakışması çözüldü)
+# y!yardim - ÖZEL HELP (Varsayılan help kaldırıldı)
 # ======================================================================
 @bot.command(name='yardim')
 @command_channel_only()
@@ -519,7 +521,7 @@ async def clear_messages(ctx, amount: int = 100):
         await ctx.send(f"❌ Failed to delete messages: {e}", delete_after=3)
 
 # ======================================================================
-# REAKSIYON OLAYI - EPHEMERAL (SADECE KULLANICI GÖRÜR)
+# REAKSIYON OLAYI - EPHEMERAL
 # ======================================================================
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -561,7 +563,6 @@ async def on_reaction_add(reaction, user):
             print(f"❌ Rol oluşturma hatası: {e}")
             return
     
-    # Zaten role sahipse - EPHEMERAL uyarı
     if role in member.roles:
         embed_already = discord.Embed(
             title="ℹ️ ALREADY HAVE ACCESS",
@@ -574,12 +575,10 @@ async def on_reaction_add(reaction, user):
         await reaction.message.channel.send(embed=embed_already, ephemeral=True)
         return
     
-    # Rolü ver
     try:
         await member.add_roles(role)
         print(f"✅ {user.name} - {role.name} rolü verildi!")
         
-        # EPHEMERAL başarı mesajı (sadece kullanıcı görür)
         embed_success = discord.Embed(
             title="✅ ROLE GRANTED!",
             description=f"You have been given the **{role.name}** role!",
