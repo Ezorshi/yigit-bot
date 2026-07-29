@@ -18,7 +18,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "✅ Yigit Bot çalışıyor!"
+    return "✅ Yigit Keys Bot çalışıyor!"
 
 @app.route('/health')
 def health():
@@ -43,7 +43,7 @@ if not TOKEN:
 # AYARLAR
 # ======================================================================
 AUTHORIZED_USER_ID = 1006507336426340364  # 🔥 Senin Discord ID'n
-STATUS_CHANNEL_ID = 1531992520547106930   # 🔥 Durum mesajlarının gönderileceği kanal
+STATUS_CHANNEL_ID = 1531992520547106930   # 🔥 Durum kanalı ID
 
 # ======================================================================
 # VERİTABANI
@@ -83,6 +83,7 @@ class KeyClaimButton(discord.ui.View):
         user_id = str(interaction.user.id)
         now = datetime.now()
         
+        # 24 saat kontrolü
         if user_id in db["last_key_time"]:
             last_time = datetime.fromisoformat(db["last_key_time"][user_id])
             if now - last_time < timedelta(hours=24):
@@ -97,6 +98,7 @@ class KeyClaimButton(discord.ui.View):
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
         
+        # Aktif lisans kontrolü
         if user_id in db["users"]:
             key_data = db["users"][user_id]
             if datetime.fromisoformat(key_data["expires"]) > now:
@@ -108,6 +110,7 @@ class KeyClaimButton(discord.ui.View):
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
         
+        # Yeni key (1 GÜN GEÇERLİ)
         new_key = generate_key()
         expires = now + timedelta(days=1)
         
@@ -139,7 +142,7 @@ class KeyClaimButton(discord.ui.View):
             value="Enter this key when the Knife Duels script asks for a license.",
             inline=False
         )
-        embed.set_footer(text="yigit script | Knife Duels")
+        embed.set_footer(text="yigit keys | Knife Duels")
         
         await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -152,7 +155,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ======================================================================
-# DURUM DÖNGÜSÜ (5 DAKİKADA BİR MESAJ GÖNDER)
+# DURUM MESAJI (5 DAKİKADA BİR)
 # ======================================================================
 async def status_message_loop():
     """Her 5 dakikada bir durum kanalına mesaj gönderir"""
@@ -160,7 +163,6 @@ async def status_message_loop():
     
     while not bot.is_closed():
         try:
-            # Kanalı bul
             channel = bot.get_channel(STATUS_CHANNEL_ID)
             if not channel:
                 print(f"❌ Durum kanalı bulunamadi! ID: {STATUS_CHANNEL_ID}")
@@ -195,53 +197,67 @@ async def status_message_loop():
             
             # Embed mesajı oluştur
             embed = discord.Embed(
-                title="⚡ YIGIT SCRIPT v5.0 | KNIFE DUELS",
-                description="**Bot Durumu:** 🟢 Çalışıyor",
+                title="⚡ YIGIT KEYS",
+                description="**Status:** 🟢 Online & Ready",
                 color=discord.Color.green(),
                 timestamp=datetime.now()
             )
             
+            # 📊 SERVER INFO
             embed.add_field(
-                name="📊 Sunucu Bilgileri",
-                value=f"├─ 👥 Toplam Üye: **{total_members}**\n"
-                      f"├─ 🔑 Oluşturulan Key: **{total_keys}**\n"
-                      f"├─ ✅ Aktif Key: **{active_keys}**\n"
-                      f"└─ ⏰ Süresi Dolan: **{expired_keys}**",
+                name="📊 SERVER INFO",
+                value=f"┌ 👥 Members: **{total_members}**\n"
+                      f"├ 🔑 Keys Generated: **{total_keys}**\n"
+                      f"├ ✅ Active Keys: **{active_keys}**\n"
+                      f"└ ⏰ Expired Keys: **{expired_keys}**",
                 inline=False
             )
             
+            # 💻 SYSTEM
+            try:
+                cpu = psutil.cpu_percent()
+                ram = psutil.virtual_memory()
+                ram_used = ram.used // (1024**3)
+                ram_total = ram.total // (1024**3)
+                
+                embed.add_field(
+                    name="💻 SYSTEM",
+                    value=f"┌ 📡 Ping: **{ping}ms**\n"
+                          f"├ ⏱️ Uptime: **{uptime_str}**\n"
+                          f"├ 💻 CPU: **%{cpu}**\n"
+                          f"└ 🧠 RAM: **{ram_used}GB / {ram_total}GB**",
+                    inline=False
+                )
+            except:
+                embed.add_field(
+                    name="💻 SYSTEM",
+                    value=f"┌ 📡 Ping: **{ping}ms**\n"
+                          f"├ ⏱️ Uptime: **{uptime_str}**\n"
+                          f"└ 💻 System info not available",
+                    inline=False
+                )
+            
+            # 🎮 SCRIPTS
             embed.add_field(
-                name="💾 Sistem Bilgileri",
-                value=f"├─ 📡 Ping: **{ping}ms**\n"
-                      f"├─ ⏱️ Çalışma Süresi: **{uptime_str}**\n"
-                      f"├─ 💻 CPU: **%{psutil.cpu_percent()}**\n"
-                      f"└─ 🧠 RAM: **{psutil.virtual_memory().used // (1024**3)}GB / {psutil.virtual_memory().total // (1024**3)}GB**",
+                name="🎮 SCRIPTS",
+                value="┌ **Knife Duel** — 🟢 Working\n"
+                      "│  └ Key system active, claim your key!\n"
+                      "├ **Coming Soon** — 🔜\n"
+                      "└ **More scripts in development...**",
                 inline=False
             )
             
+            # 🔗 HOW TO GET A KEY
             embed.add_field(
-                name="✨ Premium Features",
-                value="• Auto Aim\n"
-                      "• ESP & Glow\n"
-                      "• Rage Mode\n"
-                      "• Visual Effects\n"
-                      "• Triggerbot\n"
-                      "• 24h Keys",
-                inline=True
-            )
-            
-            embed.add_field(
-                name="🔗 Nasıl Key Alınır?",
-                value="**CLAIM KEY** butonuna tıkla veya `/keyinfo` yaz.",
-                inline=True
+                name="🔗 HOW TO GET A KEY",
+                value="Click **CLAIM KEY** button or use `/keyinfo`",
+                inline=False
             )
             
             embed.set_footer(
-                text="yigit script | Knife Duels | 24h keys",
-                icon_url="https://cdn.discordapp.com/attachments/..."  # İkon ekleyebilirsin
+                text="yigit keys | knife duels | 24h keys"
             )
             
-            # Mesajı gönder
             await channel.send(embed=embed)
             print(f"✅ Durum mesajı gönderildi: {datetime.now().strftime('%H:%M:%S')}")
             
@@ -252,7 +268,7 @@ async def status_message_loop():
         await asyncio.sleep(300)
 
 # ======================================================================
-# DURUM DÖNGÜSÜ (Bot'un status'u için)
+# BOT STATUS DÖNGÜSÜ
 # ======================================================================
 async def status_loop():
     await bot.wait_until_ready()
@@ -271,10 +287,10 @@ async def status_loop():
                 total_members += guild.member_count or 0
             
             messages = [
-                f"yigitscript | {total_keys} keys",
+                f"yigit keys | {total_keys} keys",
                 f"Knife Duels | {active_keys} active",
-                f"yigitscript | {total_members} users",
-                "yigitscript | new scripts"
+                f"yigit keys | {total_members} users",
+                "yigit keys | new scripts"
             ]
             status = messages[index % len(messages)]
             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
@@ -290,7 +306,7 @@ async def status_loop():
 @bot.command(name='knife-duel')
 async def send_knife_duel_key(ctx):
     if ctx.author.id != AUTHORIZED_USER_ID:
-        await ctx.send("❌ Bu komutu kullanma yetkin yok!")
+        await ctx.send("❌ You don't have permission to use this command!")
         return
     
     embed = discord.Embed(
@@ -310,10 +326,159 @@ async def send_knife_duel_key(ctx):
         ),
         color=discord.Color.blue()
     )
-    embed.set_footer(text="yigit script | Knife Duels | 24h keys")
+    embed.set_footer(text="yigit keys | Knife Duels | 24h keys")
     view = KeyClaimButton()
     await ctx.send(embed=embed, view=view)
-    await ctx.send(f"✅ Knife Duels key mesajı bu kanala gönderildi!")
+    await ctx.send(f"✅ Knife Duels key message sent to this channel!")
+
+# ======================================================================
+# KOMUT: !click-mesaj
+# ======================================================================
+@bot.command(name='click-mesaj')
+async def send_click_message(ctx):
+    """Knife Duels access mesajı - Sadece yetkili"""
+    
+    if ctx.author.id != AUTHORIZED_USER_ID:
+        await ctx.send("❌ You don't have permission to use this command!")
+        return
+    
+    embed = discord.Embed(
+        title="🔪 KNIFE DUELS ACCESS",
+        description="React with ✅ below to get access to **Knife Duels** keys!",
+        color=discord.Color.blue()
+    )
+    
+    embed.add_field(
+        name="🎯 HOW TO GET ACCESS",
+        value=(
+            "**1.** React with ✅ below this message\n"
+            "**2.** You will receive the **clicked** role\n"
+            "**3.** Access to **#knife-duels-key** channel\n"
+            "**4.** Claim your Knife Duels key!\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚡ **1 key per 24 hours**\n"
+            "⏰ **24 hours validity**\n"
+            "🔒 **Private key delivery**"
+        ),
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🔪 KNIFE DUELS FEATURES",
+        value=(
+            "• Auto Aim\n"
+            "• ESP & Glow\n"
+            "• Rage Mode\n"
+            "• Visual Effects\n"
+            "• Triggerbot"
+        ),
+        inline=True
+    )
+    
+    embed.add_field(
+        name="📌 HOW TO USE",
+        value=(
+            "1️⃣ Click ✅ reaction\n"
+            "2️⃣ Get **clicked** role\n"
+            "3️⃣ Access **#knife-duels-key**\n"
+            "4️⃣ Use `/keyinfo`\n"
+            "5️⃣ Click **CLAIM KEY**"
+        ),
+        inline=True
+    )
+    
+    embed.set_footer(text="yigit keys | knife duels | clicked role")
+    
+    message = await ctx.send(embed=embed)
+    await message.add_reaction("✅")
+    await ctx.send(f"✅ Knife Duels access message sent! React with ✅ to get the **clicked** role.")
+
+# ======================================================================
+# REAKSIYON OLAYI (CLICKED ROLÜ VER)
+# ======================================================================
+@bot.event
+async def on_reaction_add(reaction, user):
+    """Kullanıcı ✅ tepkisi verdiğinde clicked rolünü ver"""
+    
+    if user.bot:
+        return
+    
+    if str(reaction.emoji) != "✅":
+        return
+    
+    if reaction.message.author.id != bot.user.id:
+        return
+    
+    if not reaction.message.embeds:
+        return
+    
+    embed = reaction.message.embeds[0]
+    if not embed.title or "KNIFE DUELS" not in embed.title.upper():
+        return
+    
+    guild = reaction.message.guild
+    if not guild:
+        return
+    
+    member = guild.get_member(user.id)
+    if not member:
+        return
+    
+    role = discord.utils.get(guild.roles, name="clicked")
+    
+    if not role:
+        try:
+            role = await guild.create_role(
+                name="clicked",
+                color=discord.Color.green(),
+                reason="Knife Duels access role"
+            )
+            print(f"✅ 'clicked' rolü oluşturuldu!")
+        except Exception as e:
+            print(f"❌ Rol oluşturma hatası: {e}")
+            return
+    
+    if role in member.roles:
+        try:
+            embed_dm = discord.Embed(
+                title="ℹ️ ALREADY HAVE ACCESS",
+                description=f"You already have the **{role.name}** role!\n\n"
+                            f"🔑 Access **#knife-duels-key** channel for your key.",
+                color=discord.Color.blue()
+            )
+            embed_dm.set_footer(text="yigit keys | knife duels")
+            await user.send(embed=embed_dm)
+        except:
+            pass
+        return
+    
+    try:
+        await member.add_roles(role)
+        print(f"✅ {user.name} - clicked rolü verildi!")
+        
+        try:
+            embed_dm = discord.Embed(
+                title="✅ KNIFE DUELS ACCESS GRANTED!",
+                description=f"You now have the **{role.name}** role!\n\n"
+                            f"🔑 Go to **#knife-duels-key** channel.\n"
+                            f"🎯 Click **CLAIM KEY** to get your 24h key.\n"
+                            f"📌 Use `/keyinfo` to check your license.",
+                color=discord.Color.green()
+            )
+            embed_dm.add_field(
+                name="📋 YOUR ACCESS",
+                value=f"• Role: **{role.name}**\n"
+                      f"• Channel: **#knife-duels-key**\n"
+                      f"• Key: **24 hours validity**",
+                inline=False
+            )
+            embed_dm.set_footer(text="yigit keys | knife duels")
+            await user.send(embed=embed_dm)
+        except:
+            pass
+            
+    except Exception as e:
+        print(f"❌ Rol verme hatası: {e}")
 
 # ======================================================================
 # /KEYINFO KOMUTU
@@ -352,7 +517,7 @@ async def slash_keyinfo(interaction: discord.Interaction):
     embed.add_field(name="Status", value="❌ Expired" if is_expired else "✅ Active", inline=True)
     embed.add_field(name="Time Left", value=time_left, inline=True)
     embed.add_field(name="Expires", value=expires.strftime('%d.%m.%Y %H:%M'), inline=True)
-    embed.set_footer(text="yigit script | Knife Duels")
+    embed.set_footer(text="yigit keys | Knife Duels")
     
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -361,27 +526,25 @@ async def slash_keyinfo(interaction: discord.Interaction):
 # ======================================================================
 @bot.event
 async def on_ready():
-    print(f'✅ Bot hazir! {bot.user}')
-    print(f'📊 {len(bot.guilds)} sunucuda aktif')
+    print(f'✅ Bot ready! {bot.user}')
+    print(f'📊 {len(bot.guilds)} servers active')
     for guild in bot.guilds:
-        print(f'📌 {guild.name} - {guild.member_count} üye')
+        print(f'📌 {guild.name} - {guild.member_count} members')
     
-    # Bot'un başlangıç zamanını kaydet
     bot.uptime = time.time()
     
-    # Durum döngülerini başlat
     bot.loop.create_task(status_loop())
     bot.loop.create_task(status_message_loop())
     
     try:
         await bot.tree.sync()
-        print("✅ Slash komutlar senkronize edildi!")
+        print("✅ Slash commands synced!")
     except Exception as e:
-        print(f"❌ Senkronizasyon hatasi: {e}")
+        print(f"❌ Sync error: {e}")
 
 # ======================================================================
 # BOT ÇALIŞTIR
 # ======================================================================
 if __name__ == "__main__":
-    print("🔪 Knife Duels Bot başlatılıyor...")
+    print("🔪 Yigit Keys Bot starting...")
     bot.run(TOKEN)
