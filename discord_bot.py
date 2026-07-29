@@ -296,9 +296,9 @@ async def status_loop():
             await asyncio.sleep(30)
 
 # ======================================================================
-# y!help - GELİŞMİŞ KATEGORİLİ
+# y!yardim - GELİŞMİŞ KATEGORİLİ (help çakışması çözüldü)
 # ======================================================================
-@bot.command(name='help')
+@bot.command(name='yardim')
 @command_channel_only()
 async def help_command(ctx):
     """Display all commands with categories"""
@@ -309,7 +309,6 @@ async def help_command(ctx):
         color=discord.Color.blue()
     )
     
-    # 🎯 KEY & LICENSE
     embed.add_field(
         name="🎯 KEY & LICENSE",
         value=(
@@ -321,7 +320,6 @@ async def help_command(ctx):
         inline=False
     )
     
-    # 👥 ACCESS & ROLES
     embed.add_field(
         name="👥 ACCESS & ROLES",
         value=(
@@ -331,7 +329,6 @@ async def help_command(ctx):
         inline=False
     )
     
-    # ⚙️ ADMIN
     embed.add_field(
         name="⚙️ ADMIN",
         value=(
@@ -341,17 +338,15 @@ async def help_command(ctx):
         inline=False
     )
     
-    # ℹ️ INFO
     embed.add_field(
         name="ℹ️ INFO",
         value=(
-            "**y!help**\n"
+            "**y!yardim**\n"
             "└ Show this help menu"
         ),
         inline=False
     )
     
-    # 📌 QUICK GUIDE
     embed.add_field(
         name="📌 QUICK GUIDE",
         value=(
@@ -366,7 +361,6 @@ async def help_command(ctx):
     )
     
     embed.set_footer(text="yigit keys | knife duels | v5.0")
-    embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/...")
     
     await ctx.send(embed=embed)
 
