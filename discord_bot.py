@@ -390,11 +390,11 @@ async def send_click_message(ctx):
     await ctx.send(f"✅ Knife Duels access message sent! React with ✅ to get the **{role.name}** role.")
 
 # ======================================================================
-# REAKSIYON OLAYI - EPHEMERAL (SADECE KİŞİ GÖRÜR)
+# REAKSIYON OLAYI - KİŞİYİ ETİKETLE (Ephemeral yok)
 # ======================================================================
 @bot.event
 async def on_reaction_add(reaction, user):
-    """Kullanıcı ✅ tepkisi verdiğinde clicked rolünü ver - Ephemeral mesaj"""
+    """Kullanıcı ✅ tepkisi verdiğinde clicked rolünü ver - Kişiyi etiketle"""
     
     if user.bot:
         return
@@ -437,17 +437,11 @@ async def on_reaction_add(reaction, user):
     
     # Kullanıcı zaten role sahip mi?
     if role in member.roles:
-        # Ephemeral mesaj (sadece o kişi görür)
-        embed_already = discord.Embed(
-            title="ℹ️ ALREADY HAVE ACCESS",
-            description=f"You already have the **{role.name}** role!\n\n"
-                        f"🔑 Access **#knife-duels-key** channel for your key.",
-            color=discord.Color.blue()
+        # Kişiyi etiketleyerek mesaj gönder
+        await reaction.message.channel.send(
+            f"ℹ️ {user.mention} You already have the **{role.name}** role! "
+            f"Access **#knife-duels-key** channel for your key."
         )
-        embed_already.set_footer(text="yigit keys | knife duels")
-        
-        # Mesajı ephermeral olarak gönder
-        await reaction.message.channel.send(embed=embed_already, ephemeral=True)
         return
     
     # Rolü ver
@@ -455,10 +449,10 @@ async def on_reaction_add(reaction, user):
         await member.add_roles(role)
         print(f"✅ {user.name} - {role.name} rolü verildi!")
         
-        # ✅ EPHEMERAL BAŞARI MESAJI (SADECE KİŞİ GÖRÜR)
+        # ✅ BAŞARI MESAJI (KİŞİYİ ETİKETLE)
         embed_success = discord.Embed(
             title="✅ ROLE GRANTED!",
-            description=f"You have been given the **{role.name}** role!",
+            description=f"{user.mention} You have been given the **{role.name}** role!",
             color=discord.Color.green()
         )
         embed_success.add_field(
@@ -474,17 +468,14 @@ async def on_reaction_add(reaction, user):
         )
         embed_success.set_footer(text="yigit keys | knife duels")
         
-        await reaction.message.channel.send(embed=embed_success, ephemeral=True)
-        print(f"✅ {user.name} - Ephemeral bildirim gönderildi!")
+        await reaction.message.channel.send(embed=embed_success)
+        print(f"✅ {user.name} - Kanal bildirimi gönderildi!")
             
     except Exception as e:
         print(f"❌ Rol verme hatası: {e}")
-        embed_error = discord.Embed(
-            title="❌ ERROR",
-            description=f"Could not give you the **{role.name}** role. Please contact an admin.",
-            color=discord.Color.red()
+        await reaction.message.channel.send(
+            f"❌ {user.mention} Could not give you the **{role.name}** role. Please contact an admin."
         )
-        await reaction.message.channel.send(embed=embed_error, ephemeral=True)
 
 # ======================================================================
 # KOMUT: !clear
